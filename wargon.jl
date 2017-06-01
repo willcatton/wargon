@@ -31,7 +31,7 @@ To do:
 - Castling; no castling across check
 """
 
-LEVEL = 2
+LEVEL = 1
 
 whitepawn = collect(9:16)
 blackpawn = collect(17:24)
@@ -51,8 +51,8 @@ type board
   pieces::Array{Int8,1}
   whitesmove::Bool
   movelog::Array{Tuple{Int8,Int8},1}
-  moves::Array{Tuple{Int8,Int8,Int8,Bool},1}
   disallowcastling::Array{Bool,1}
+  #moves::Array{Tuple{Int8,Int8,Int8,Bool},1}
 end
 print(io::IO, b::board) = show(io, b)
 show(io::IO, b::board) = print(io, b)
@@ -61,22 +61,23 @@ function newboard()
   pieces = [collect(1:16); collect(49:64)]
   whitesmove = true
   movelog = Array{Tuple{Int8,Int64,String},1}[]
-  moves = Array{Tuple{Int8,Int8,Int8,Bool},1}[]
   disallowcastling = [false,false,false,false]
-  board(squares,pieces,whitesmove,movelog,moves,disallowcastling)
+  board(squares,pieces,whitesmove,movelog,disallowcastling)
 end
-undo = (x) -> (x[2], x[1])
-function apply!(b::board, m)
-  taken = b.squares[m[2]]
-  if 0 < taken <= 32
-    b.pieces[taken]=0
+undo = (x)->(x[2],x[1])
+function apply!(board,move)
+  if typeof(move) <: AbstractString
+    move = topair(uppercase(move))
   end
-  b.squares[m[2]]=b.squares[m[1]]
-  b.squares[m[1]]=0
-  b.pieces[b.squares[m[2]]]=m[2]
-  b.whitesmove = !b.whitesmove
-  push!(b.moves, toquad(m, b))
-  undo(m), taken
+  taken = board.squares[move[2]]
+  if 0 < taken <= 32
+    board.pieces[taken]=0
+  end
+  board.squares[move[2]]=board.squares[move[1]]
+  board.squares[move[1]]=0
+  board.pieces[board.squares[move[2]]]=move[2]
+  board.whitesmove = !board.whitesmove
+  undo(move), taken
 end
 function value(b)
   values = [5;3;3;9;1000;3;3;5;ones(Int32,8);-ones(Int32,8);-5;-3;-3;-9;-1000;-3;-3;-5]
@@ -85,7 +86,7 @@ end
 
 up = (x) -> begin
   (x<1||x>64) && return 0
-  x+8>64 && return 0
+  x+8>65 && return 0 # TODO : 64?!
   x+8
 end
 down = (x) -> begin
@@ -105,12 +106,12 @@ end
 upLeft = (x) -> begin
   (x<1||x>64) && return 0
   mod(x-1,8)==0 && return 0
-  x+8>64 && return 0
+  x+8>65 && return 0
   x+7
 end
 upRight = (x) -> begin
   (x<1||x>64) && return 0
-  x+8>64 && return 0
+  x+8>65 && return 0
   mod(x+1,8)==1 && return 0
   x+9
 end
@@ -155,22 +156,15 @@ isOpposite(c, x, b) = ifelse(c=="white", isBlack(x, b), isWhite(x, b))
 isblack = (piece)->piece[1]=='b'
 iswhite = (piece)->piece[1]=='w'
 
-function topair(m::AbstractString)
-  fromcol, fromrow, tocol, torow = colnum(m[1]), parse(Int,m[2]), colnum(m[4]), parse(Int,m[5])
+function topair(m)
+  if length(m)==4
+    m=string(m[1:2],":",m[3:4])
+  end
+  fromcol,fromrow,tocol,torow = colnum(m[1]),parse(Int,m[2]),colnum(m[4]),parse(Int,m[5])
   from = fromcol + 8*(fromrow-1)
   to = tocol + 8*(torow-1)
-  move = (from, to)
+  move = (from,to)
 end
-
-function toquad(m::Tuple, b::board)
-  color = ifelse(b.whitesmove, "white", "black")
-  (from, to) = m
-  taken = b.squares[to]
-  check = intocheck(b, m, color)
-  (from, to, taken, check)
-end
-
-#toquad(m::Tuple{Int8,Int64,String}, b::board) = toquad((m[1],m[2]), b)
 
 function pawnMoves(board, color)
   moves = []
@@ -184,6 +178,9 @@ function pawnMoves(board, color)
     else
       to = inc(from)
       if isEmpty(to,board)
+        #if (56 < to <= 64) || (0 < to <= 8)
+        #  to += 64
+        #end
         push!(moves,(from,to,""))
         to = inc(to)
         if pawnUnmoved(piece,board) && isEmpty(to,board)
@@ -273,8 +270,7 @@ function possiblemoves(b)
 end
 
 function restore!(board::board, undo, taken)
-  quad = pop!(b.moves)
-  apply!(board, undo)
+  apply!(board,undo)
   if taken != 0
     board.pieces[taken] = undo[1]
     board.squares[undo[1]] = taken
@@ -295,10 +291,15 @@ function incheck(b::board, color)
     return false
 end
 
-function intocheck(b::board, m, color)
-    println("HERE 1 : $m")
-    undoing = apply!(b,m)
-    println("HERE 2")
+function intocheck(b::board, m)
+    color = ifelse(b.whitesmove, "white", "black")
+    try
+      undoing = apply!(b,m)
+    catch
+      print(b)
+      print(show(m))
+      println(map(show,possiblemoves(b)))
+    end
     result = incheck(b, color)
     restore!(b,undoing...)
     return result
@@ -306,7 +307,7 @@ end
 
 function allowedmoves(b)
     color = ifelse(b.whitesmove, "white", "black")
-    [m for m in possiblemoves(b) if !(intocheck(b, m, color))]
+    [m for m in possiblemoves(b) if !(intocheck(b, m))]
 end 
 
 function minimax(board, depth)
@@ -320,10 +321,8 @@ function minimax(board, depth)
   for move in moves
     #println("    "^(2-depth),show(move))
     undoing = apply!(board, move)
-    #if depth > 1
-    #    println(depth," :  ","    "^(3-depth),show(move))
-    #end
     score = -minimax(board, depth-1)[2]
+    #println(depth," :  ","    "^(3-depth),show(move), " : ", score)
     if depth == LEVEL
         # println(show(move)," : ",score)
     end
@@ -467,7 +466,7 @@ function play(b; autoplay=false)
         end
         m = input("\n> ")
         assert(m in map(show, allowed))
-        apply!(b,topair(m))
+        apply!(b,m)
         push!(b.movelog, (m[1], m[2]))
       end
       print(b)
@@ -492,7 +491,6 @@ function play(b; autoplay=false)
         println("Breaking out of game")
         break
       end
-      throw(e)
       println("Incorrect move. Try again...")
     end
   end
