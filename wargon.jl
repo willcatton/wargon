@@ -293,8 +293,8 @@ end
 
 function intocheck(b::board, m)
     color = ifelse(b.whitesmove, "white", "black")
-    try
-      undoing = apply!(b,m)
+    undoing = try
+      apply!(b,m)
     catch
       print(b)
       print(show(m))
