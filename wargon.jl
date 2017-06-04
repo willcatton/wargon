@@ -31,7 +31,7 @@ To do:
 - Castling; no castling across check
 """
 
-LEVEL = 1
+LEVEL = 2
 
 whitepawn = collect(9:16)
 blackpawn = collect(17:24)
