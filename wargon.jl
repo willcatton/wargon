@@ -20,10 +20,34 @@ To do:
 - Each evalutation (for each starting point and ply) gets put into the massive hash table.
 """
 
+abstract type moves end
+
+type move <: moves
+  from::Int8
+  to::Int8
+  takes::Int8
+end
+
+type extra <: moves
+  from::Int8
+  to::Int8
+  takes::Int8
+end
+
+type board
+  squares::Array{Int8,1}
+  pieces::Array{Int8,1}
+  whitesmove::Bool
+  disallowcastling::Array{Bool,1}
+  moves::Array{moves,1}
+end
+
 LEVEL = 4
 VERBOSE = false
 NOCATCH = false
 NOSQ = 65
+ALLOWCASTLING = true
+CASTLINGMOVES = [extra(5,3,NOSQ), extra(5,7,NOSQ), extra(61,59,NOSQ), extra(61,63,NOSQ)]
 
 whitepawn = [9,10,11,12,13,14,15,16]
 blackpawn = [17,18,19,20,21,22,23,24]
@@ -37,20 +61,6 @@ whitequeen = [4]
 blackqueen = [28]
 whiteking = [5]
 blackking = [29]
-
-type move
-  from::Int8
-  to::Int8
-  takes::Int8
-end
-
-type board
-  squares::Array{Int8,1}
-  pieces::Array{Int8,1}
-  whitesmove::Bool
-  disallowcastling::Array{Bool,1}
-  moves::Array{move,1}
-end
 
 print(io::IO, b::board) = show(io, b)
 show(io::IO, b::board) = print(io, b)
@@ -72,6 +82,37 @@ function apply!(b::board, m::move)
   b.whitesmove = !b.whitesmove
   push!(b.moves, m)
   return
+end
+
+function apply!(b::board, m1::extra)
+    function getm2(m1)
+        if m1.from==5 && m1.to==3     # QUEENSIDE CASTLE
+            return extra(1,4,NOSQ)
+        elseif m1.from==5 && m1.to==7
+            return extra(8,6,NOSQ)
+        elseif m1.from==61 && m1.to==59
+            return extra(56,60,NOSQ)
+        elseif m1.from==61 && m1.to==63
+            return extra(64,62,NOSQ)
+        elseif m1.from==3 && m1.to==5 # TAKE BACK CASTLE
+            return extra(4,1,NOSQ)
+        elseif m1.from==7 && m1.to==5
+            return extra(6,8,NOSQ)
+        elseif m1.from==59 && m1.to==61
+            return extra(60,56,NOSQ)
+        elseif m1.from==63 && m1.to==61
+            return extra(62,64,NOSQ)
+        end
+    end
+    m2 = getm2(m1)
+    b.pieces[b.squares[m1.from]]=m1.to
+    b.squares[m1.to]=b.squares[m1.from]
+    b.squares[m1.from]=NOSQ
+    b.pieces[b.squares[m2.from]]=m2.to
+    b.squares[m2.to]=b.squares[m2.from]
+    b.squares[m2.from]=NOSQ
+    push!(b.moves, m1)
+    b.whitesmove = !b.whitesmove
 end
 
 function value(b)
@@ -151,7 +192,7 @@ isopposite(whitesmove, x, b) = ifelse(whitesmove, isblack(x, b), iswhite(x, b))
 isblack(piece) = piece[1]=='b'
 iswhite(piece) = piece[1]=='w'
 
-function tomove(b::board)
+function tomove(b::board; extratype=false)
   function _tomove(m)
     if length(m)==4
       m=string(m[1:2],":",m[3:4])
@@ -159,52 +200,56 @@ function tomove(b::board)
     fromcol,fromrow,tocol,torow = colnum(m[1]),parse(Int,m[2]),colnum(m[4]),parse(Int,m[5])
     from = fromcol + 8*(fromrow-1)
     to = tocol + 8*(torow-1)
-    return move(from,to,b.squares[to])
+    if extratype
+        return extra(from,to,b.squares[to])
+    else
+        return move(from,to,b.squares[to])
+    end
   end
 end
 
 function pawnMoves(b::board; whitesmove=b.whitesmove)
-  moves = []
+  mymoves = move[]
   inc = ifelse(whitesmove, up, down)
   pieces=ifelse(whitesmove, whitepawn, blackpawn) 
   for piece in pieces
     from = b.pieces[piece]
     to = inc(from)
     if isempty(to,b)
-      push!(moves,move(from,to,NOSQ))
+      push!(mymoves,move(from,to,NOSQ))
       to = inc(to)
       if pawnUnmoved(piece,b) && isempty(to,b)
-        push!(moves,move(from,to,NOSQ))
+        push!(mymoves,move(from,to,NOSQ))
       end
     end
     for to in [inc(left(from)), inc(right(from))]
       if isopposite(whitesmove,to,b)
-        push!(moves,move(from,to,b.squares[to]))
+        push!(mymoves,move(from,to,b.squares[to]))
       end
     end
   end
-  moves
+  mymoves
 end
 
 function knightMoves(b::board; whitesmove=b.whitesmove)
-  moves = move[]
+  mymoves = move[]
   pieces = ifelse(whitesmove, whiteknight, blackknight)
   for piece in pieces
     from = b.pieces[piece]
     for m in [upUpLeft upUpRight upLeftLeft upRightRight downLeftLeft downRightRight downDownLeft downDownRight]
       to = m(from)
       if isempty(to,b)
-        push!(moves,move(from,to,NOSQ))
+        push!(mymoves,move(from,to,NOSQ))
       elseif isopposite(whitesmove,to,b)
-        push!(moves,move(from,to,b.squares[to]))
+        push!(mymoves,move(from,to,b.squares[to]))
       end
     end
   end
-  moves
+  mymoves
 end
 
 function crossboard(b::board, pieces, whitesmove, increments, multistep)
-  moves = move[]
+  mymoves = move[]
   for piece in pieces
     from = b.pieces[piece]
     for inc in increments
@@ -212,12 +257,12 @@ function crossboard(b::board, pieces, whitesmove, increments, multistep)
       while true
         to = inc(to)
         if isempty(to,b)
-          push!(moves, move(from,to,NOSQ))
+          push!(mymoves, move(from,to,NOSQ))
           if !multistep
             break
           end
         elseif isopposite(whitesmove,to,b)
-          push!(moves,move(from,to,b.squares[to]))
+          push!(mymoves, move(from,to,b.squares[to]))
           break
         else
           break
@@ -225,7 +270,7 @@ function crossboard(b::board, pieces, whitesmove, increments, multistep)
       end
     end
   end
-  return moves
+  return mymoves
 end
 
 function rookMoves(b::board; whitesmove=b.whitesmove)
@@ -252,14 +297,37 @@ function kingMoves(b::board; whitesmove=b.whitesmove)
     crossboard(b, pieces, whitesmove, increments, false)
 end
 
-function possiblemoves(b::board)
-  moves = [pawnMoves(b); rookMoves(b); knightMoves(b); 
-           bishopMoves(b); queenMoves(b); kingMoves(b)]
+function castlingMoves(b::board; whitesmove=b.whitesmove)
+    mymoves = moves[]
+    pieces = ifelse(whitesmove, whiteking, blackking)
+    if whitesmove
+        if !b.disallowcastling[1] && isempty(4,b) && isempty(3,b) && isempty(2,b)
+            push!(mymoves, extra(5,3,NOSQ))
+        end
+        if !b.disallowcastling[2] && isempty(6,b) && isempty(7,b)
+            push!(mymoves, extra(5,7,NOSQ))
+        end
+    else
+        if !b.disallowcastling[3] && isempty(60,b) && isempty(59,b) && isempty(58,b)
+            push!(mymoves, extra(61,59,NOSQ))
+        end
+        if !b.disallowcastling[4] && isempty(62,b) && isempty(63,b)
+            push!(mymoves, extra(61,63,NOSQ))
+        end
+    end
+    return mymoves
 end
 
-function takeback!(b::board)
-  m = pop!(b.moves)
-  undo = move(m.to,m.from,NOSQ)
+function possiblemoves(b::board)
+    possible = [pawnMoves(b); rookMoves(b); knightMoves(b); 
+                bishopMoves(b); queenMoves(b); kingMoves(b)]
+    if ALLOWCASTLING
+        possible = [possible; castlingMoves(b)]
+    end
+end
+
+function _takeback!(b::board, m::moves)
+  undo = ifelse(typeof(m)==move, move(m.to,m.from,NOSQ), extra(m.to,m.from,NOSQ)) 
   taken = m.takes
   apply!(b, undo)
   pop!(b.moves)
@@ -267,6 +335,11 @@ function takeback!(b::board)
     b.pieces[taken] = undo.from
     b.squares[undo.from] = taken
   end
+end
+
+function takeback!(b::board)
+  m = pop!(b.moves)
+  _takeback!(b, m)
 end
 
 function incheck(b::board, white)
@@ -290,20 +363,27 @@ function intocheck(b::board, m::move)
     return result
 end
 
+function intocheck(b::board, m::extra)
+    #apply!(b, m)
+    #result = incheck(b, !b.whitesmove)
+    #takeback!(b)
+    return false
+end
+
 function allowedmoves(b::board)
     [m for m in possiblemoves(b) if !(intocheck(b, m))]
 end 
 
-function minimax(b::board, depth; moves=move[])
-  if length(moves)==0
-    moves = shuffle(possiblemoves(b))
+function minimax(b::board, depth; toconsider=moves[])
+  if length(toconsider)==0
+    toconsider = shuffle(possiblemoves(b))
   end
   if depth == 0 || length(moves) == 0
     score = ifelse(b.whitesmove, 1, -1) * value(b)
     return move(0, 0, NOSQ), score
   end
   bestmove, bestscore = move(0, 0, NOSQ), -Inf
-  for m in moves
+  for m in toconsider
     apply!(b, m)
     s = -minimax(b, depth-1)[2]
     if VERBOSE
@@ -317,16 +397,16 @@ function minimax(b::board, depth; moves=move[])
   return bestmove, bestscore
 end
 
-function alphabeta(bi::board, depth, α, β, whitesmove; moves=move[])
-  if length(moves)==0
-    moves = shuffle(possiblemoves(bi))
+function alphabeta(bi::board, depth, α, β, whitesmove; toconsider=moves[])
+  if length(toconsider)==0
+    toconsider = shuffle(possiblemoves(bi))
   end
   if depth == 0
     return move(0, 0, NOSQ), value(bi)
   end
   if whitesmove
     mb, v = move(0, 0, NOSQ), -Inf
-    for mi in moves
+    for mi in toconsider
       apply!(bi, mi)
       assert(bi.whitesmove==false)
       mr, s = alphabeta(bi,depth-1,α,β,false)
@@ -348,7 +428,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; moves=move[])
     return mb, v
   else
     mb, v = move(0, 0, NOSQ), +Inf
-    for mi in moves
+    for mi in toconsider
       apply!(bi, mi)
       assert(bi.whitesmove==true)
       mr, s = alphabeta(bi,depth-1,α,β,true)
@@ -377,8 +457,8 @@ function input(prompt::AbstractString="")
 end
 
 function showmoves(b::board)
-    moves = map(show,allowedmoves(b))
-    join(moves,", ")
+    toshow = map(show,allowedmoves(b))
+    join(toshow,", ")
 end
 
 function prnt(piece)
@@ -429,7 +509,7 @@ function show(io::IO, b::board)
   print("$(length(allowedmoves(b))) available moves: \n  $(showmoves(b))\n")
 end
 
-show(m::move) = string(square(m.from),ifelse(m.takes!=NOSQ,"x",":"),square(m.to))
+show(m::moves) = string(square(m.from),ifelse(m.takes!=NOSQ,"x",":"),square(m.to))
 
 function checkmate(b)
     winner = ifelse(!b.whitesmove,"WHITE","BLACK")
@@ -448,7 +528,8 @@ function play(b; autoplay=false)
         end
         mstr = input("\n> ")
         assert(mstr in map(show, allowed))
-        m = tomove(b)(mstr)
+        castling = mstr in map(show,CASTLINGMOVES)
+        m = ifelse(castling,tomove(b;extratype=true)(mstr),tomove(b)(mstr))
         apply!(b, m)
       end
       print(b)
@@ -458,8 +539,8 @@ function play(b; autoplay=false)
       if length(allowed) == 0
          return checkmate(b2)
       end
-      #m, s = minimax(b2, LEVEL; moves=shuffle(allowed))
-      m, s = alphabeta(b2, LEVEL, -Inf, Inf, b2.whitesmove; moves=shuffle(allowed))
+      #m, s = minimax(b2, LEVEL; toconsider=shuffle(allowed))
+      m, s = alphabeta(b2, LEVEL, -Inf, Inf, b2.whitesmove; toconsider=shuffle(allowed))
       toc = time()
       elapsed = Base.Dates.Second(round(toc-tic))
       print("\n> ",show(m)," elapsed time: $elapsed\n")
