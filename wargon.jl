@@ -6,32 +6,56 @@ import Base.isempty
 
 """
 To do:
-- 4 'moves' concrete types: move, take, castle, promote. 4 apply! functions; 4 takeback! functions
-- pawn promotion
-- no castling across check
-- 3-in-a-row rule...
-- incheck sees if king could take knight with a knitesmove, etc..
-- use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
-- Serialize board. Hash result. Create a hash table mapping from hash start to [white_in_check, black_in_check]
-- moves = line + tree
-- currentmove = length(moves) + 1
-- only check right castle if e1:f1 and h1:g1 in moves.
-- only check left castle if e1:d1 and a1:b1 and a1:c1 in moves.
-- get parallel threads running + computer thinking while human is thinking.
-- each evalutation (for each starting point and ply) gets put into the massive hash table.
-- iterative deepening
+ - 4 'moves' concrete types: move, take, castle, promote. 4 apply! functions; 4 takeback! functions
+ - pawn promotion
+ - no castling across check
+ - 3-in-a-row rule...
+ - incheck sees if king could take knight with a knitesmove, etc..
+ - use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
+ - Serialize board. Hash result. Create a hash table mapping from hash start to [white_in_check, black_in_check]
+ - moves = line + tree
+ - currentmove = length(moves) + 1
+ - only check right castle if e1:f1 and h1:g1 in moves.
+ - only check left castle if e1:d1 and a1:b1 and a1:c1 in moves.
+ - get parallel threads running + computer thinking while human is thinking.
+ - each evalutation (for each starting point and ply) gets put into the massive hash table.
+ - iterative deepening
 """
 
 abstract type moves end
 
+type m0ve <: moves
+  oldsq::Int8
+  newsq::Int8
+  piece::Int8
+end
+type take <: moves
+  oldsq::Int8
+  newsq::Int8
+  piece::Int8
+  takes::Int8
+end
+type castle <: moves
+  oldsq1::Int8
+  newsq1::Int8
+  oldpc2::Int8
+  newpc2::Int8
+end
+type promote <: moves
+  oldsq::Int8
+  newsq::Int8
+  oldpc::Int8
+  newpc::Int8
+  takes::Int8
+end
+
 type move <: moves
   oldsq::Int8
   newsq::Int8
-  oldpc::Int8 # just piece
+  oldpc::Int8
   newpc::Int8
-  takes::Int8 # no takes
+  takes::Int8
 end
-
 type extra <: moves
   oldsq::Int8
   newsq::Int8
@@ -93,6 +117,48 @@ function apply!(b::board, m::move)
   b.pieces[m.newpc]=m.newsq
   b.squares[m.oldsq]=NOSQ
   b.squares[m.newsq]=m.newpc
+  b.pieces[m.takes]=NOSQ
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+
+function apply!(b::board, m::m0ve)
+  b.squares[m.oldsq]=NOSQ
+  b.pieces[m.piece]=m.newsq
+  b.squares[m.newsq]=m.piece
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+
+function apply!(b::board, m::take)
+  b.squares[m.oldsq]=NOSQ
+  b.pieces[m.piece]=m.newsq
+  b.pieces[m.takes]=NOSQ
+  b.squares[m.newsq]=m.piece
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+
+function apply!(b::board, m::castle)
+  b.squares[m.oldsq1] = NOSQ
+  b.pieces[m.piece1] = m.newsq1
+  b.squares[m.newsq1] = m.piece1
+  b.squares[m.oldsq2] = NOSQ
+  b.pieces[m.piece2] = m.newsq2
+  b.squares[m.newsq2] = m.piece2
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+
+function apply!(b::board, m::promote)
+  b.squares[m.oldsq]=NOSQ
+  b.pieces[m.oldpc]=NOSQ
+  b.pieces[m.newsq]=m.newpc
+  b.pieces[m.newpc]=m.newsq
   b.pieces[m.takes]=NOSQ
   b.whitesmove=!b.whitesmove
   push!(b.moves,m)
@@ -406,8 +472,40 @@ function possiblemoves(b::board)
     return possible
 end
 
-function _takeback!(b::board, m::moves)
+function takeback!(b::board, m::moves)
   undo = ifelse(typeof(m)==move, move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ), extra(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)) 
+  taken = m.takes
+  apply!(b, undo)
+  pop!(b.moves)
+  if taken != NOSQ
+    b.pieces[taken] = undo.oldsq
+    b.squares[undo.oldsq] = taken
+  end
+end
+
+function takeback!(b::board, m::m0ve)
+  undo = m0ve(m.newsq,m.oldsq,m.piece) 
+  apply!(b, undo)
+  pop!(b.moves)
+end
+
+function takeback!(b::board, m::take)
+  undo = move(m.newsq,m.oldsq,m.piece,NOSQ)
+  taken = m.takes
+  apply!(b, undo)
+  pop!(b.moves)
+  b.pieces[taken] = undo.oldsq
+  b.squares[undo.oldsq] = taken
+end
+
+function takeback!(b::board, m::castle)
+  undo = castle(m.newsq1, m.oldsq1, m.newpc2, m.oldpc2)
+  apply!(b, undo)
+  pop!(b.moves)
+end
+
+function takeback!(b::board, m::promote)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
   taken = m.takes
   apply!(b, undo)
   pop!(b.moves)
@@ -419,7 +517,7 @@ end
 
 function takeback!(b::board)
   m = pop!(b.moves)
-  _takeback!(b, m)
+  takeback!(b, m)
 end
 
 function incheck(b::board, white)
