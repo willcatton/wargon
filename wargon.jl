@@ -61,7 +61,7 @@ ALLOWCASTLING = true
 CASTLINGMOVES =     [extra(05,03,05,05,NOSQ), extra(05,07,05,05,NOSQ), extra(61,59,61,61,NOSQ), extra(61,63,61,61,NOSQ)]
 CASTLINGTAKEBACKS = [extra(03,05,05,05,NOSQ), extra(07,05,05,05,NOSQ), extra(59,61,61,61,NOSQ), extra(63,61,61,61,NOSQ)]
 
-whitepawn = [9,10,11,12,13,14,15,16]
+whitepawn = [09,10,11,12,13,14,15,16]
 blackpawn = [49,50,51,52,53,54,55,56]
 whiterook = [01,08]
 blackrook = [57,64]
