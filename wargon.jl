@@ -6,17 +6,20 @@ import Base.isempty
 
 """
 To do:
-- Serialize board. Hash result. Create a dict from hash start to [white_in_check, black_in_check]
-- Use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
+- 4 'moves' concrete types: move, take, castle, promote. 4 apply! functions; 4 takeback! functions
+- pawn promotion
+- no castling across check
+- 3-in-a-row rule...
+- incheck sees if king could take knight with a knitesmove, etc..
+- use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
+- Serialize board. Hash result. Create a hash table mapping from hash start to [white_in_check, black_in_check]
 - moves = line + tree
 - currentmove = length(moves) + 1
 - only check right castle if e1:f1 and h1:g1 in moves.
 - only check left castle if e1:d1 and a1:b1 and a1:c1 in moves.
-- Pawn promotion.
-- 3-in-a-row rule...
-- No castling across check
-- Get parallel threads running + computer thinking while human is thinking.
-- Each evalutation (for each starting point and ply) gets put into the massive hash table.
+- get parallel threads running + computer thinking while human is thinking.
+- each evalutation (for each starting point and ply) gets put into the massive hash table.
+- iterative deepening
 """
 
 abstract type moves end
@@ -24,9 +27,9 @@ abstract type moves end
 type move <: moves
   oldsq::Int8
   newsq::Int8
-  oldpc::Int8
+  oldpc::Int8 # just piece
   newpc::Int8
-  takes::Int8
+  takes::Int8 # no takes
 end
 
 type extra <: moves
