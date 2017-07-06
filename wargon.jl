@@ -61,7 +61,6 @@ LEVEL = 4
 VERBOSE = false
 NOCATCH = false
 NOSQ = 65
-ALLOWCASTLING = true
 whitepawn = [09,10,11,12,13,14,15,16]
 blackpawn = [49,50,51,52,53,54,55,56]
 whiterook = [01,08]
@@ -369,10 +368,8 @@ end
 
 function possiblemoves(b::board)
     possible = [pawnMoves(b); rookMoves(b); knightMoves(b); 
-                bishopMoves(b); queenMoves(b); kingMoves(b)]
-    if ALLOWCASTLING
-        possible = [possible; castlingMoves(b)]
-    end
+                bishopMoves(b); queenMoves(b); kingMoves(b);
+                castlingMoves(b)]
     return possible
 end
 
