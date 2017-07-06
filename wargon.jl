@@ -6,16 +6,12 @@ import Base.isempty
 
 """
 To do:
- - 4 'moves' concrete types: move, take, castle, promote. 4 apply! functions; 4 takeback! functions
- - pawn promotion
  - no castling across check
  - 3-in-a-row rule...
  - incheck sees if king could take knight with a knitesmove, etc..
  - use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
  - Serialize board. Hash result. Create a hash table mapping from hash start to [white_in_check, black_in_check]
- - moves = line + tree
- - currentmove = length(moves) + 1
- - only check right castle if e1:f1 and h1:g1 in moves.
+ - only check right castle if e1:f1 and h1:f1 in moves.
  - only check left castle if e1:d1 and a1:b1 and a1:c1 in moves.
  - get parallel threads running + computer thinking while human is thinking.
  - each evalutation (for each starting point and ply) gets put into the massive hash table.
@@ -24,22 +20,20 @@ To do:
 
 abstract type moves end
 
-type m0ve <: moves
+type move <: moves
   oldsq::Int8
   newsq::Int8
-  piece::Int8
-end
-type take <: moves
-  oldsq::Int8
-  newsq::Int8
-  piece::Int8
+  oldpc::Int8
+  newpc::Int8
   takes::Int8
 end
 type castle <: moves
-  oldsq1::Int8
-  newsq1::Int8
+  oldsq::Int8
+  newsq::Int8
+  oldpc::Int8
+  oldsq2::Int8
+  newsq2::Int8
   oldpc2::Int8
-  newpc2::Int8
 end
 type promote <: moves
   oldsq::Int8
@@ -48,29 +42,12 @@ type promote <: moves
   newpc::Int8
   takes::Int8
 end
-
-type move <: moves
-  oldsq::Int8
-  newsq::Int8
-  oldpc::Int8
-  newpc::Int8
-  takes::Int8
-end
-type extra <: moves
-  oldsq::Int8
-  newsq::Int8
-  oldpc::Int8
-  newpc::Int8
-  takes::Int8
-end
-
 type board
   squares::Array{Int8,1}
   pieces::Array{Int8,1}
   whitesmove::Bool
   moves::Array{moves,1}
 end
-
 function ==(m1::moves,m2::moves)
   ((typeof(m1)==typeof(m2)) && 
    (m1.oldsq==m2.oldsq) && 
@@ -85,19 +62,16 @@ VERBOSE = false
 NOCATCH = false
 NOSQ = 65
 ALLOWCASTLING = true
-CASTLINGMOVES =     [extra(05,03,05,05,NOSQ), extra(05,07,05,05,NOSQ), extra(61,59,61,61,NOSQ), extra(61,63,61,61,NOSQ)]
-CASTLINGTAKEBACKS = [extra(03,05,05,05,NOSQ), extra(07,05,05,05,NOSQ), extra(59,61,61,61,NOSQ), extra(63,61,61,61,NOSQ)]
-
 whitepawn = [09,10,11,12,13,14,15,16]
 blackpawn = [49,50,51,52,53,54,55,56]
 whiterook = [01,08]
 blackrook = [57,64]
-whiteknight = [02,07]
-blackknight = [58,63]
+whiteknight = [02,07,25,26,27,28,29,30,31,32]
+blackknight = [58,63,33,34,35,36,37,38,39,40]
 whitebishop = [03,06]
 blackbishop = [59,62]
-whitequeen = [04]
-blackqueen = [60]
+whitequeen = [04,17,18,19,20,21,22,23,24]
+blackqueen = [60,41,42,43,44,45,46,47,48]
 whiteking = [05]
 blackking = [61]
 
@@ -123,123 +97,39 @@ function apply!(b::board, m::move)
   return
 end
 
-function apply!(b::board, m::m0ve)
-  b.squares[m.oldsq]=NOSQ
-  b.pieces[m.piece]=m.newsq
-  b.squares[m.newsq]=m.piece
-  b.whitesmove=!b.whitesmove
-  push!(b.moves,m)
-  return
-end
-
-function apply!(b::board, m::take)
-  b.squares[m.oldsq]=NOSQ
-  b.pieces[m.piece]=m.newsq
-  b.pieces[m.takes]=NOSQ
-  b.squares[m.newsq]=m.piece
-  b.whitesmove=!b.whitesmove
-  push!(b.moves,m)
-  return
-end
-
 function apply!(b::board, m::castle)
-  b.squares[m.oldsq1] = NOSQ
-  b.pieces[m.piece1] = m.newsq1
-  b.squares[m.newsq1] = m.piece1
+  b.squares[m.oldsq] = NOSQ
+  b.pieces[m.oldpc] = m.newsq
+  b.squares[m.newsq] = m.oldpc
   b.squares[m.oldsq2] = NOSQ
-  b.pieces[m.piece2] = m.newsq2
-  b.squares[m.newsq2] = m.piece2
+  b.pieces[m.oldpc2] = m.newsq2
+  b.squares[m.newsq2] = m.oldpc2
   b.whitesmove=!b.whitesmove
   push!(b.moves,m)
   return
 end
 
 function apply!(b::board, m::promote)
-  b.squares[m.oldsq]=NOSQ
   b.pieces[m.oldpc]=NOSQ
-  b.pieces[m.newsq]=m.newpc
   b.pieces[m.newpc]=m.newsq
+  b.squares[m.oldsq]=NOSQ
+  b.squares[m.newsq]=m.newpc
   b.pieces[m.takes]=NOSQ
   b.whitesmove=!b.whitesmove
   push!(b.moves,m)
   return
 end
 
-function apply!(b::board, m1::extra)
-  if m1 in CASTLINGMOVES
-    function getm2(m1)
-        if m1.oldsq==05 && m1.newsq==03        # QUEENSIDE CASTLE
-            return extra(01,04,01,01,NOSQ)
-        elseif m1.oldsq==05 && m1.newsq==07
-            return extra(08,06,08,08,NOSQ)
-        elseif m1.oldsq==61 && m1.newsq==59
-            return extra(56,60,56,56,NOSQ)
-        elseif m1.oldsq==61 && m1.newsq==63
-            return extra(64,62,64,64,NOSQ)
-        elseif m1.oldsq==03 && m1.newsq==05    # TAKE BACK CASTLE
-            return extra(04,01,01,01,NOSQ)
-        elseif m1.oldsq==07 && m1.newsq==05
-            return extra(06,08,08,08,NOSQ)
-        elseif m1.oldsq==59 && m1.newsq==61
-            return extra(60,56,60,56,NOSQ)
-        elseif m1.oldsq==63 && m1.newsq==61
-            return extra(62,64,62,64,NOSQ)
-        end
-    end
-    m2 = getm2(m1)
-    b.pieces[m1.oldpc]=NOSQ
-    b.pieces[m1.newpc]=m1.newsq
-    b.squares[m1.oldsq]=NOSQ
-    b.squares[m1.newsq]=m1.newpc
-    b.pieces[m2.oldpc]=NOSQ
-    b.pieces[m2.newpc]=m2.newsq
-    b.squares[m2.newsq]=m2.newpc
-    b.squares[m2.oldsq]=NOSQ
-    push!(b.moves, m1)
-    b.whitesmove = !b.whitesmove
-  elseif m1 in CASTLINGTAKEBACKS
-    function gm2(m1)
-        if m1.oldsq==03 && m1.newsq==05        # QUEENSIDE CASTLE
-            return extra(04,01,01,01,NOSQ)
-        elseif m1.oldsq==07 && m1.newsq==05
-            return extra(06,08,08,08,NOSQ)
-        elseif m1.oldsq==59 && m1.newsq==61
-            return extra(60,56,56,56,NOSQ)
-        elseif m1.oldsq==63 && m1.newsq==61
-            return extra(62,64,64,64,NOSQ)
-        elseif m1.oldsq==05 && m1.newsq==03    # TAKE BACK CASTLE
-            return extra(01,04,01,01,NOSQ)
-        elseif m1.oldsq==05 && m1.newsq==07
-            return extra(08,06,08,08,NOSQ)
-        elseif m1.oldsq==61 && m1.newsq==59
-            return extra(56,60,60,56,NOSQ)
-        elseif m1.oldsq==61 && m1.newsq==63
-            return extra(64,62,62,64,NOSQ)
-        end
-    end
-    m2 = gm2(m1)
-    b.pieces[m1.oldpc]=NOSQ
-    b.pieces[m1.newpc]=m1.newsq
-    b.squares[m1.oldsq]=NOSQ
-    b.squares[m1.newsq]=m1.newpc
-    b.pieces[m2.oldpc]=NOSQ
-    b.pieces[m2.newpc]=m2.newsq
-    b.squares[m2.newsq]=m2.newpc
-    b.squares[m2.oldsq]=NOSQ
-    push!(b.moves, m1)
-    b.whitesmove = !b.whitesmove
-  else
-    b.pieces[m1.oldpc]=NOSQ
-    b.pieces[m1.newpc]=m1.newsq
-    b.squares[m1.oldsq]=NOSQ
-    b.squares[m1.newsq]=m1.newpc
-    push!(b.moves, m1)
-    b.whitesmove = !b.whitesmove
-  end
-end
-
 function value(b)
-  values = [5;3;3;9;1000;3;3;5;ones(Int32,8);zeros(Int,32);-ones(Int32,8);-5;-3;-3;-9;-1000;-3;-3;-5;0]
+  values = [+5;+3;+3;+9;+1000;+3;+3;+5;
+            +1*ones(Int,8);
+            +9*ones(Int,8);
+            +3*ones(Int,8);
+            -3*ones(Int,8);
+            -9*ones(Int,8);
+            -ones(Int32,8);
+            -5;-3;-3;-9;-1000;-3;-3;-5;
+            0]
   return sum(values[b.pieces .!= NOSQ])
 end
 
@@ -292,14 +182,16 @@ downLeftLeft = (x) -> down(left(left(x)))
 downRightRight = (x) -> down(right(right(x)))
 downDownLeft = (x) -> down(down(left(x)))
 downDownRight = (x) -> down(down(right(x)))
-
 pawnUnmoved = (p,b) -> ((9<=p<=16 || 49<=p<=56) && b.pieces[p]==p)
-
-pieces = Dict(1=>"wR",2=>"wN",3=>"wB",4=>"wQ",5=>"wK",6=>"wB",7=>"wN",8=>"wR",
-              9=>"wP",10=>"wP",11=>"wP",12=>"wP",13=>"wP",14=>"wP",15=>"wP",16=>"wP",
-             49=>"bP",50=>"bP",51=>"bP",52=>"bP",53=>"bP",54=>"bP",55=>"bP",56=>"bP",
-             57=>"bR",58=>"bN",59=>"bB",60=>"bQ",61=>"bK",62=>"bB",63=>"bN",64=>"bR",
-             NOSQ=>"  ",0=>"  ")
+pieces = ["wR","wN","wB","wQ","wK","wB","wN","wR",
+          "wP","wP","wP","wP","wP","wP","wP","wP",
+          "wQ","wQ","wQ","wQ","wQ","wQ","wQ","wQ",
+          "wN","wN","wN","wN","wN","wN","wN","wN",
+          "bN","bN","bN","bN","bN","bN","bN","bN",
+          "bQ","bQ","bQ","bQ","bQ","bQ","bQ","bQ",
+          "bP","bP","bP","bP","bP","bP","bP","bP",
+          "bR","bN","bB","bQ","bK","bB","bN","bR",
+          "  "]
 row(x) = div((x-1)%64,8)+1
 col(x) = mod((x-1)%64,8)+1
 isempty(x, board) = 0<x<65 && board.squares[x]==NOSQ
@@ -315,24 +207,36 @@ isopposite(whitesmove, x, b) = ifelse(whitesmove, isblack(x, b), iswhite(x, b))
 isblack(piece) = piece[1]=='b'
 iswhite(piece) = piece[1]=='w'
 
-function tomove(b::board; extratype=false)
+function tomove(b::board)
   function _tomove(m)
     fromcol,fromrow,tocol,torow = colnum(m[1]),parse(Int,m[2]),colnum(m[4]),parse(Int,m[5])
     from = fromcol + 8*(fromrow-1)
     to = tocol + 8*(torow-1)
     piece=b.squares[from]
-    if extratype
-        newpc = piece
-        if length(m)==6
-            newpcstr = m[6]
-            newpc = ifelse(b.whitesmove,
-                           ifelse(newpcstr=="N",piece+16,piece+8),
-                           ifelse(newpcstr=="N",piece-16,piece-8))
+    if piece in [whiteking; blackking]
+        if abs(from-to)==2
+            if (from,to,piece) == (05,07,05)
+                return castle(from,to,piece,08,06,08)
+            elseif (from,to,piece) == (05,03,05)
+                return castle(from,to,piece,01,04,01)
+            elseif (from,to,piece) == (61,63,61)
+                return castle(from,to,piece,64,62,64)
+            elseif (from,to,piece) == (61,59,61)
+                return castle(from,to,piece,57,60,57)
+            end
         end
-        return extra(from,to,piece,newpc,b.squares[to])
-    else
-        return move(from,to,piece,piece,b.squares[to])
+    end 
+    if length(m)==7 
+        newpcstr = m[7]
+        if (piece in whitepawn) && (row(to)==8)
+            newpc = ifelse(newpcstr=='N',piece+16,piece+8)
+            return promote(from,to,piece,newpc,b.squares[to]) 
+        elseif (piece in blackpawn) && (row(to)==1)
+            newpc = ifelse(newpcstr=='N',piece-16,piece-8)
+            return promote(from,to,piece,newpc,b.squares[to])
+        end
     end
+    return move(from,to,piece,piece,b.squares[to])
   end
 end
 
@@ -345,11 +249,11 @@ function pawnMoves(b::board; whitesmove=b.whitesmove)
     to = inc(from)
     if isempty(to,b)
       if (whitesmove && row(to)==8)
-        push!(mymoves,extra(from,to,piece,piece+08,NOSQ))
-        push!(mymoves,extra(from,to,piece,piece+16,NOSQ))
+        push!(mymoves,promote(from,to,piece,piece+08,NOSQ))
+        push!(mymoves,promote(from,to,piece,piece+16,NOSQ))
       elseif (!whitesmove && row(to)==1)
-        push!(mymoves,extra(from,to,piece,piece-08,NOSQ))
-        push!(mymoves,extra(from,to,piece,piece-16,NOSQ))
+        push!(mymoves,promote(from,to,piece,piece-08,NOSQ))
+        push!(mymoves,promote(from,to,piece,piece-16,NOSQ))
       else
         push!(mymoves,move(from,to,piece,piece,NOSQ))
       end
@@ -447,17 +351,17 @@ function castlingMoves(b::board; whitesmove=b.whitesmove)
     unmoved(piece) = !(piece in [m.oldpc for m in b.moves])
     if whitesmove
         if unmoved(1) && unmoved(5) && isempty(4,b) && isempty(3,b) && isempty(2,b)
-            push!(mymoves, extra(5,3,5,5,NOSQ))
+            push!(mymoves, castle(05,03,05,01,04,01))
         end
         if unmoved(8) && unmoved(5) && isempty(6,b) && isempty(7,b)
-            push!(mymoves, extra(5,7,5,5,NOSQ))
+            push!(mymoves, castle(05,07,05,08,06,08))
         end
     else
         if unmoved(57) && unmoved(61) && isempty(60,b) && isempty(59,b) && isempty(58,b)
-            push!(mymoves, extra(61,59,61,61,NOSQ))
+            push!(mymoves, castle(61,59,61,57,60,57))
         end
         if unmoved(64) && unmoved(61) && isempty(62,b) && isempty(63,b)
-            push!(mymoves, extra(61,63,61,61,NOSQ))
+            push!(mymoves, castle(61,63,61,64,62,64))
         end
     end
     return mymoves
@@ -472,8 +376,8 @@ function possiblemoves(b::board)
     return possible
 end
 
-function takeback!(b::board, m::moves)
-  undo = ifelse(typeof(m)==move, move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ), extra(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)) 
+function takeback!(b::board, m::move)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
   taken = m.takes
   apply!(b, undo)
   pop!(b.moves)
@@ -483,25 +387,11 @@ function takeback!(b::board, m::moves)
   end
 end
 
-function takeback!(b::board, m::m0ve)
-  undo = m0ve(m.newsq,m.oldsq,m.piece) 
-  apply!(b, undo)
-  pop!(b.moves)
-end
-
-function takeback!(b::board, m::take)
-  undo = move(m.newsq,m.oldsq,m.piece,NOSQ)
-  taken = m.takes
-  apply!(b, undo)
-  pop!(b.moves)
-  b.pieces[taken] = undo.oldsq
-  b.squares[undo.oldsq] = taken
-end
-
 function takeback!(b::board, m::castle)
-  undo = castle(m.newsq1, m.oldsq1, m.newpc2, m.oldpc2)
+  undo = castle(m.newsq, m.oldsq, m.oldpc, m.newsq2, m.oldsq2, m.oldpc2)
   apply!(b, undo)
   pop!(b.moves)
+  return
 end
 
 function takeback!(b::board, m::promote)
@@ -534,14 +424,14 @@ function incheck(b::board, white)
     return false
 end
 
-function intocheck(b::board, m::move)
+function intocheck(b::board, m::moves)
     apply!(b, m)
     result = incheck(b, !b.whitesmove)
     takeback!(b)
     return result
 end
 
-function intocheck(b::board, m::extra)
+function intocheck(b::board, m::castle)
     #apply!(b, m)
     #result = incheck(b, !b.whitesmove)
     #takeback!(b)
@@ -657,7 +547,6 @@ function show(b::board)
   for row in 8:-1:1
     print_with_color(:blue, "$row | ")
     for col in 1:8
-      #println(row," ",col," ",col+(row-1)*8," ",b.squares[col+(row-1)*8])
       piecestr = pieces[b.squares[col+(row-1)*8]]
        if piecestr=="  " 
          if (row+col)%2 == 0
@@ -688,6 +577,8 @@ function show(io::IO, b::board)
 end
 
 show(m::moves) = string(square(m.oldsq),ifelse(m.takes!=NOSQ,"x",":"),square(m.newsq))
+show(m::castle) = string(square(m.oldsq),":",square(m.newsq))
+show(m::promote) = string(square(m.oldsq),ifelse(m.takes!=NOSQ,"x",":"),square(m.newsq),":",ifelse(25<=m.newpc<=42,"N","Q"))
 
 function checkmate(b)
     winner = ifelse(!b.whitesmove,"WHITE","BLACK")
@@ -698,7 +589,7 @@ function play(b; autoplay=false)
   while true
     b2 = deepcopy(b)
     allowed = allowedmoves(b)
-    #try
+    try
       if !autoplay && b.whitesmove
         print(b)
         if length(allowed) == 0
@@ -706,8 +597,7 @@ function play(b; autoplay=false)
         end
         mstr = input("\n> ")
         assert(mstr in map(show, allowed))
-        castling = mstr in map(show,CASTLINGMOVES)
-        m = ifelse(castling,tomove(b;extratype=true)(mstr),tomove(b)(mstr))
+        m = tomove(b)(mstr)
         apply!(b, m)
       end
       print(b)
@@ -724,19 +614,19 @@ function play(b; autoplay=false)
       print("\n> ",show(m)," elapsed time: $elapsed\n")
       sleep(1)
       apply!(b,m)
-    #catch e
-    #  if NOCATCH
-    #    throw(e)
-    #  end
-    #  print(b)
-    #  if isa(e, InterruptException)
-    #    println("Breaking out of game")
-    #    break
-    #  end
-    #  println("Incorrect move. Try again...")
-    #end
+    catch e
+      if NOCATCH
+        throw(e)
+      end
+      print(b)
+      if isa(e, InterruptException)
+        println("Breaking out of game")
+        break
+      end
+      println("Incorrect move. Try again...")
+    end
   end
 end
 
-b = newboard()
-play(b, autoplay=false)
+#b = newboard()
+#play(b, autoplay=false)
