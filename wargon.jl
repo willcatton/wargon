@@ -132,6 +132,13 @@ function value(b)
   return sum(values[b.pieces .!= NOSQ])
 end
 
+
+#################################################
+# REMOVE CHAINING OF THESE FUNCTIONS            #
+# -> REMOVES NEED TO GUARD AGAINST x<1 or x>64? #
+# -> ONELINERS USING IFELSE                     #
+#################################################
+
 up = (x) -> begin
   (x<1||x>64) && return 0
   x+8>65 && return 0
