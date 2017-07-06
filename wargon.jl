@@ -439,29 +439,6 @@ function allowedmoves(b::board)
     [m for m in possiblemoves(b) if !(intocheck(b, m))]
 end 
 
-function minimax(b::board, depth; toconsider=moves[])
-  if length(toconsider)==0
-    toconsider = shuffle(possiblemoves(b))
-  end
-  if depth == 0 || length(moves) == 0
-    score = ifelse(b.whitesmove, 1, -1) * value(b)
-    return move(0, 0, NOSQ, NOSQ), score
-  end
-  bestmove, bestscore = move(0, 0, NOSQ, NOSQ), -Inf
-  for m in toconsider
-    apply!(b, m)
-    s = -minimax(b, depth-1)[2]
-    if VERBOSE
-      println(depth," :  ","    "^(3-depth),show(m), " : ", s)
-    end
-    if s > bestscore
-      bestmove, bestscore = m, s
-    end
-    takeback!(b)
-  end
-  return bestmove, bestscore
-end
-
 function alphabeta(bi::board, depth, α, β, whitesmove; toconsider=moves[])
   if length(toconsider)==0
     toconsider = shuffle(possiblemoves(bi))
@@ -604,7 +581,6 @@ function play(b; autoplay=false)
       if length(allowed) == 0
          return checkmate(b2)
       end
-      #m, s = minimax(b2, LEVEL; toconsider=shuffle(allowed))
       m, s = alphabeta(b2, LEVEL, -Inf, Inf, b2.whitesmove; toconsider=shuffle(allowed))
       toc = time()
       elapsed = Base.Dates.Second(round(toc-tic))
@@ -625,5 +601,9 @@ function play(b; autoplay=false)
   end
 end
 
-#b = newboard()
-#play(b, autoplay=false)
+b = try
+   b
+catch
+   newboard()
+end
+play(b, autoplay=false)
