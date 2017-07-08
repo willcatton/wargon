@@ -56,6 +56,67 @@ function ==(m1::moves,m2::moves)
    (m1.newpc==m2.newpc) && 
    (m1.takes==m2.takes))
 end
+function apply!(b::board, m::move)
+  b.pieces[m.oldpc]=NOSQ
+  b.pieces[m.newpc]=m.newsq
+  b.squares[m.oldsq]=NOSQ
+  b.squares[m.newsq]=m.newpc
+  b.pieces[m.takes]=NOSQ
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+function apply!(b::board, m::castle)
+  b.squares[m.oldsq] = NOSQ
+  b.pieces[m.oldpc] = m.newsq
+  b.squares[m.newsq] = m.oldpc
+  b.squares[m.oldsq2] = NOSQ
+  b.pieces[m.oldpc2] = m.newsq2
+  b.squares[m.newsq2] = m.oldpc2
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+function apply!(b::board, m::promote)
+  b.pieces[m.oldpc]=NOSQ
+  b.pieces[m.newpc]=m.newsq
+  b.squares[m.oldsq]=NOSQ
+  b.squares[m.newsq]=m.newpc
+  b.pieces[m.takes]=NOSQ
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+function takeback!(b::board, m::move)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
+  taken = m.takes
+  apply!(b, undo)
+  pop!(b.moves)
+  if taken != NOSQ
+    b.pieces[taken] = undo.oldsq
+    b.squares[undo.oldsq] = taken
+  end
+end
+function takeback!(b::board, m::castle)
+  undo = castle(m.newsq, m.oldsq, m.oldpc, m.newsq2, m.oldsq2, m.oldpc2)
+  apply!(b, undo)
+  pop!(b.moves)
+  return
+end
+function takeback!(b::board, m::promote)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
+  taken = m.takes
+  apply!(b, undo)
+  pop!(b.moves)
+  if taken != NOSQ
+    b.pieces[taken] = undo.oldsq
+    b.squares[undo.oldsq] = taken
+  end
+end
+function takeback!(b::board)
+  m = pop!(b.moves)
+  takeback!(b, m)
+end
 
 LEVEL = 4
 VERBOSE = false
@@ -73,6 +134,7 @@ whitequeen = [04,17,18,19,20,21,22,23,24]
 blackqueen = [60,41,42,43,44,45,46,47,48]
 whiteking = [05]
 blackking = [61]
+castlingmoves = [castle(05,03,05,01,04,01), castle(05,07,05,08,06,08), castle(61,59,61,57,60,57), castle(61,63,61,64,62,64)]
 
 print(io::IO, b::board) = show(io, b)
 show(io::IO, b::board) = print(io, b)
@@ -83,40 +145,6 @@ function newboard()
   whitesmove = true
   moves = Array{move,1}()
   board(squares,pieces,whitesmove,moves)
-end
-
-function apply!(b::board, m::move)
-  b.pieces[m.oldpc]=NOSQ
-  b.pieces[m.newpc]=m.newsq
-  b.squares[m.oldsq]=NOSQ
-  b.squares[m.newsq]=m.newpc
-  b.pieces[m.takes]=NOSQ
-  b.whitesmove=!b.whitesmove
-  push!(b.moves,m)
-  return
-end
-
-function apply!(b::board, m::castle)
-  b.squares[m.oldsq] = NOSQ
-  b.pieces[m.oldpc] = m.newsq
-  b.squares[m.newsq] = m.oldpc
-  b.squares[m.oldsq2] = NOSQ
-  b.pieces[m.oldpc2] = m.newsq2
-  b.squares[m.newsq2] = m.oldpc2
-  b.whitesmove=!b.whitesmove
-  push!(b.moves,m)
-  return
-end
-
-function apply!(b::board, m::promote)
-  b.pieces[m.oldpc]=NOSQ
-  b.pieces[m.newpc]=m.newsq
-  b.squares[m.oldsq]=NOSQ
-  b.squares[m.newsq]=m.newpc
-  b.pieces[m.takes]=NOSQ
-  b.whitesmove=!b.whitesmove
-  push!(b.moves,m)
-  return
 end
 
 function value(b)
@@ -132,63 +160,32 @@ function value(b)
   return sum(values[b.pieces .!= NOSQ])
 end
 
+up(x) = ifelse(x<1||x>57,0,x+8)
+down(x) = ifelse(x<9||x>64,0,x-8)
+left(x) = ifelse(x<1||x>64||mod(x-1,8)==0,0,x-1)
+right(x) = ifelse(x<1||x>64||mod(x+1,8)==1,0,x+1)
+upLeft(x) = ifelse(x<1||x>57||mod(x-1,8)==0,0,x+7)
+upRight(x) = ifelse(x<1||x>57||mod(x+1,8)==1,0,x+9)
+downLeft(x) = ifelse(x<10||x>64||mod(x-1,8)==0,0,x-9)
+downRight(x) = ifelse(x<8||x>64||mod(x+1,8)==1,0,x-7)
+upUpLeft(x) = ifelse(mod(x+15,8)==0||x>49||x<1,0,x+15)
+upUpRight(x) = ifelse(mod(x+17,8)==1||x>47||x<1,0,x+17)
+upLeftLeft(x) = ifelse(mod(x+6,8) in [0,7]||x>58||x<1,0,x+6)
+upRightRight(x) = ifelse(mod(x+10,8) in [1,2]||x>54||x<1,0,x+10)
+downLeftLeft(x) = ifelse(mod(x-10,8) in [0,7]||x<11||x>64,0,x-10)
+downRightRight(x) = ifelse(mod(x-6,8) in [1,2]||x<7||x>64,0,x-6)
+downDownLeft(x) = ifelse(mod(x-17,8)==0||x<18||x>64,0,x-17)
+downDownRight(x) = ifelse(mod(x-15,8)==1||x<16||x>64,0,x-15)
 
-#################################################
-# REMOVE CHAINING OF THESE FUNCTIONS            #
-# -> REMOVES NEED TO GUARD AGAINST x<1 or x>64? #
-# -> ONELINERS USING IFELSE                     #
-#################################################
+pawnUnmoved(p,b) = ((9<=p<=16 || 49<=p<=56) && b.pieces[p]==p)
 
-up = (x) -> begin
-  (x<1||x>64) && return 0
-  x+8>65 && return 0
-  x+8
-end
-down = (x) -> begin
-  (x<1||x>64) && return 0
-  max(x-8,0)
-end
-left = (x) -> begin
-  (x<1||x>64) && return 0
-  mod(x-1,8)==0 && return 0
-  x-1
-end
-right = (x) -> begin
-  (x<1||x>64) && return 0
-  mod(x+1,8)==1 && return 0
-  x+1
-end
-upLeft = (x) -> begin
-  (x<1||x>64) && return 0
-  mod(x-1,8)==0 && return 0
-  x+8>65 && return 0
-  x+7
-end
-upRight = (x) -> begin
-  (x<1||x>64) && return 0
-  x+8>65 && return 0
-  mod(x+1,8)==1 && return 0
-  x+9
-end
-downLeft = (x) -> begin
-  (x<1||x>64) && return 0
-  mod(x-1,8)==0 && return 0
-  max(x-9,0)
-end
-downRight = (x) -> begin
-  (x<1||x>64) && return 0
-  mod(x+1,8)==1 && return 0
-  max(x-7,0)
-end
-upUpLeft = (x) -> up(up(left(x)))
-upUpRight = (x) -> up(up(right(x)))
-upLeftLeft = (x) -> up(left(left(x)))
-upRightRight = (x) -> up(right(right(x)))
-downLeftLeft = (x) -> down(left(left(x)))
-downRightRight = (x) -> down(right(right(x)))
-downDownLeft = (x) -> down(down(left(x)))
-downDownRight = (x) -> down(down(right(x)))
-pawnUnmoved = (p,b) -> ((9<=p<=16 || 49<=p<=56) && b.pieces[p]==p)
+row(x) = div((x-1)%64,8)+1
+col(x) = mod((x-1)%64,8)+1
+isempty(x, board) = 0<x<65 && board.squares[x]==NOSQ
+iswhite(x, board) = 0<x<65 && 0<board.squares[x]<17
+isblack(x, board) = 0<x<65 && 48<board.squares[x]<NOSQ
+
+# string manipulations down here
 pieces = ["wR","wN","wB","wQ","wK","wB","wN","wR",
           "wP","wP","wP","wP","wP","wP","wP","wP",
           "wQ","wQ","wQ","wQ","wQ","wQ","wQ","wQ",
@@ -198,13 +195,6 @@ pieces = ["wR","wN","wB","wQ","wK","wB","wN","wR",
           "bP","bP","bP","bP","bP","bP","bP","bP",
           "bR","bN","bB","bQ","bK","bB","bN","bR",
           "  "]
-row(x) = div((x-1)%64,8)+1
-col(x) = mod((x-1)%64,8)+1
-isempty(x, board) = 0<x<65 && board.squares[x]==NOSQ
-iswhite(x, board) = 0<x<65 && 0<board.squares[x]<17
-isblack(x, board) = 0<x<65 && 48<board.squares[x]<NOSQ
-
-# string manipulations down here
 colstr(x) = ["A","B","C","D","E","F","G","H"][col(x)]
 colnum(x) = parse(Int, x) - 9
 rowstr(x) = string(row(x))
@@ -221,15 +211,7 @@ function tomove(b::board)
     piece=b.squares[from]
     if piece in [whiteking; blackking]
         if abs(from-to)==2
-            if (from,to,piece) == (05,07,05)
-                return castle(from,to,piece,08,06,08)
-            elseif (from,to,piece) == (05,03,05)
-                return castle(from,to,piece,01,04,01)
-            elseif (from,to,piece) == (61,63,61)
-                return castle(from,to,piece,64,62,64)
-            elseif (from,to,piece) == (61,59,61)
-                return castle(from,to,piece,57,60,57)
-            end
+            return first([x for x in castlingmoves if x.oldsq==from && x.newsq==to])
         end
     end 
     if length(m)==7 
@@ -378,40 +360,6 @@ function possiblemoves(b::board)
                 bishopMoves(b); queenMoves(b); kingMoves(b);
                 castlingMoves(b)]
     return possible
-end
-
-function takeback!(b::board, m::move)
-  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
-  taken = m.takes
-  apply!(b, undo)
-  pop!(b.moves)
-  if taken != NOSQ
-    b.pieces[taken] = undo.oldsq
-    b.squares[undo.oldsq] = taken
-  end
-end
-
-function takeback!(b::board, m::castle)
-  undo = castle(m.newsq, m.oldsq, m.oldpc, m.newsq2, m.oldsq2, m.oldpc2)
-  apply!(b, undo)
-  pop!(b.moves)
-  return
-end
-
-function takeback!(b::board, m::promote)
-  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
-  taken = m.takes
-  apply!(b, undo)
-  pop!(b.moves)
-  if taken != NOSQ
-    b.pieces[taken] = undo.oldsq
-    b.squares[undo.oldsq] = taken
-  end
-end
-
-function takeback!(b::board)
-  m = pop!(b.moves)
-  takeback!(b, m)
 end
 
 function incheck(b::board, white)
