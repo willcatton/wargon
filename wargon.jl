@@ -13,6 +13,8 @@ To do:
  - get parallel threads running + computer thinking while human is thinking.
  - each evalutation (for each starting point and ply) gets put into the massive hash table.
  - iterative deepening
+ - null moves and quiescence search
+ - deep learning static evaluator
 """
 
 abstract type moves end
@@ -340,18 +342,18 @@ function castlingMoves(b::board, possible::Array{moves,1}; whitesmove=b.whitesmo
     mymoves = moves[]
     pieces = ifelse(whitesmove, whiteking, blackking)
     unmoved(piece) = !(piece in [m.oldpc for m in b.moves])
-    if whitesmove
-        if (move(05,04,05,05,NOSQ) in possible) && (move(01,04,01,01,NOSQ) in possible) && unmoved(01) && unmoved(05)
+    if whitesmove && unmoved(05)
+        if (move(05,04,05,05,NOSQ) in possible) && (move(01,04,01,01,NOSQ) in possible) && unmoved(01)
             push!(mymoves, castle(05,03,05,01,04,01))
         end
-        if (move(05,06,05,05,NOSQ) in possible) && (move(08,06,08,08,NOSQ) in possible) && unmoved(05) && unmoved(08)
+        if (move(05,06,05,05,NOSQ) in possible) && (move(08,06,08,08,NOSQ) in possible) && unmoved(08)
             push!(mymoves, castle(05,07,05,08,06,08))
         end
-    else
-        if (move(61,60,61,61,NOSQ) in possible) && (move(57,60,57,57,NOSQ) in possible) && unmoved(57) && unmoved(61)
+    elseif !whitesmove && unmoved(61)
+        if (move(61,60,61,61,NOSQ) in possible) && (move(57,60,57,57,NOSQ) in possible) && unmoved(57)
             push!(mymoves, castle(61,59,61,57,60,57))
         end
-        if (move(61,62,61,61,NOSQ) in possible) && (move(64,62,64,64,NOSQ) in possible) && unmoved(64) && unmoved(61)
+        if (move(61,62,61,61,NOSQ) in possible) && (move(64,62,64,64,NOSQ) in possible) && unmoved(64)
             push!(mymoves, castle(61,63,61,64,62,64))
         end
     end
