@@ -7,11 +7,9 @@ import Base.isempty
 """
 To do:
  - 3-in-a-row rule...
- - incheck sees if king could take knight with a knitesmove, etc..
+ - en passent
  - use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
  - Serialize board. Hash result. Create a hash table mapping from hash start to [white_in_check, black_in_check]
- - only check right castle if e1:f1 and h1:f1 in moves.
- - only check left castle if e1:d1 and a1:b1 and a1:c1 in moves.
  - get parallel threads running + computer thinking while human is thinking.
  - each evalutation (for each starting point and ply) gets put into the massive hash table.
  - iterative deepening
@@ -388,13 +386,6 @@ function intocheck(b::board, m::moves)
     return result
 end
 
-function intocheck(b::board, m::castle)
-    #apply!(b, m)
-    #result = incheck(b, !b.whitesmove)
-    #takeback!(b)
-    return false
-end
-
 function allowedmoves(b::board)
     [m for m in possiblemoves(b) if !(intocheck(b, m))]
 end 
@@ -423,7 +414,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; toconsider=moves[])
     end
     if VERBOSE
       try
-        println("HERE 1 ",depth," :  ","    "^(3-depth),show(mb), " : ", v, " α=$α β=$β")
+        println("whitesmove: ",depth," :  ","    "^(3-depth),show(mb), " : ", v, " α=$α β=$β")
       catch
       end
     end
@@ -445,7 +436,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; toconsider=moves[])
     end
     if VERBOSE
       try
-        println("HERE 2 ",depth," :  ","    "^(3-depth),show(mb), " : ", v, " α=$α β=$β")
+        println("blacksmove ",depth," :  ","    "^(3-depth),show(mb), " : ", v, " α=$α β=$β")
       catch
       end
     end
