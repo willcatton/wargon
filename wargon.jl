@@ -11,7 +11,6 @@ To do:
  - use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
  - Serialize board. Hash result. Create a hash table mapping from hash start to [white_in_check, black_in_check]
  - get parallel threads running + computer thinking while human is thinking.
- - each evalutation (for each starting point and ply) gets put into the massive hash table.
  - iterative deepening
  - null moves and quiescence search
  - deep learning static evaluator
