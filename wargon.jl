@@ -6,7 +6,6 @@ import Base.isempty
 
 """
 To do:
- - no castling across check
  - 3-in-a-row rule...
  - incheck sees if king could take knight with a knitesmove, etc..
  - use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
@@ -231,35 +230,37 @@ end
 function pawnMoves(b::board; whitesmove=b.whitesmove)
   mymoves = moves[]
   inc = ifelse(whitesmove, up, down)
-  pieces=ifelse(whitesmove, whitepawn, blackpawn) 
+  pieces = ifelse(whitesmove, whitepawn, blackpawn) 
   for piece in pieces
     from = b.pieces[piece]
-    to = inc(from)
-    if isempty(to,b)
-      if (whitesmove && row(to)==8)
-        push!(mymoves,promote(from,to,piece,piece+08,NOSQ))
-        push!(mymoves,promote(from,to,piece,piece+16,NOSQ))
-      elseif (!whitesmove && row(to)==1)
-        push!(mymoves,promote(from,to,piece,piece-08,NOSQ))
-        push!(mymoves,promote(from,to,piece,piece-16,NOSQ))
-      else
-        push!(mymoves,move(from,to,piece,piece,NOSQ))
-      end
-      to = inc(to)
-      if pawnUnmoved(piece,b) && isempty(to,b)
-        push!(mymoves,move(from,to,piece,piece,NOSQ))
-      end
-    end
-    for to in [inc(left(from)), inc(right(from))]
-      if isopposite(whitesmove,to,b)
+    if from != NOSQ
+      to = inc(from)
+      if isempty(to,b)
         if (whitesmove && row(to)==8)
-          push!(mymoves,move(from,to,piece,piece+08,b.squares[to]))
-          push!(mymoves,move(from,to,piece,piece+16,b.squares[to]))
+          push!(mymoves,promote(from,to,piece,piece+08,NOSQ))
+          push!(mymoves,promote(from,to,piece,piece+16,NOSQ))
         elseif (!whitesmove && row(to)==1)
-          push!(mymoves,move(from,to,piece,piece+08,b.squares[to]))
-          push!(mymoves,move(from,to,piece,piece+16,b.squares[to]))
+          push!(mymoves,promote(from,to,piece,piece-08,NOSQ))
+          push!(mymoves,promote(from,to,piece,piece-16,NOSQ))
         else
-          push!(mymoves,move(from,to,piece,piece,b.squares[to]))
+          push!(mymoves,move(from,to,piece,piece,NOSQ))
+        end
+        to = inc(to)
+        if pawnUnmoved(piece,b) && isempty(to,b)
+          push!(mymoves,move(from,to,piece,piece,NOSQ))
+        end
+      end
+      for to in [inc(left(from)), inc(right(from))]
+        if isopposite(whitesmove,to,b)
+          if (whitesmove && row(to)==8)
+            push!(mymoves,move(from,to,piece,piece+08,b.squares[to]))
+            push!(mymoves,move(from,to,piece,piece+16,b.squares[to]))
+          elseif (!whitesmove && row(to)==1)
+            push!(mymoves,move(from,to,piece,piece+08,b.squares[to]))
+            push!(mymoves,move(from,to,piece,piece+16,b.squares[to]))
+          else
+            push!(mymoves,move(from,to,piece,piece,b.squares[to]))
+          end
         end
       end
     end
@@ -272,12 +273,14 @@ function knightMoves(b::board; whitesmove=b.whitesmove)
   pieces = ifelse(whitesmove, whiteknight, blackknight)
   for piece in pieces
     from = b.pieces[piece]
-    for m in [upUpLeft upUpRight upLeftLeft upRightRight downLeftLeft downRightRight downDownLeft downDownRight]
-      to = m(from)
-      if isempty(to,b)
-        push!(mymoves,move(from,to,piece,piece,NOSQ))
-      elseif isopposite(whitesmove,to,b)
-        push!(mymoves,move(from,to,piece,piece,b.squares[to]))
+    if from != NOSQ
+      for m in [upUpLeft upUpRight upLeftLeft upRightRight downLeftLeft downRightRight downDownLeft downDownRight]
+        to = m(from)
+        if isempty(to,b)
+          push!(mymoves,move(from,to,piece,piece,NOSQ))
+        elseif isopposite(whitesmove,to,b)
+          push!(mymoves,move(from,to,piece,piece,b.squares[to]))
+        end
       end
     end
   end
@@ -288,20 +291,22 @@ function crossboard(b::board, pieces, whitesmove, increments, multistep)
   mymoves = move[]
   for piece in pieces
     from = b.pieces[piece]
-    for inc in increments
-      to = from
-      while true
-        to = inc(to)
-        if isempty(to,b)
-          push!(mymoves, move(from,to,piece,piece,NOSQ))
-          if !multistep
+    if from != NOSQ
+      for inc in increments
+        to = from
+        while true
+          to = inc(to)
+          if isempty(to,b)
+            push!(mymoves, move(from,to,piece,piece,NOSQ))
+            if !multistep
+              break
+            end
+          elseif isopposite(whitesmove,to,b)
+            push!(mymoves, move(from,to,piece,piece,b.squares[to]))
+            break
+          else
             break
           end
-        elseif isopposite(whitesmove,to,b)
-          push!(mymoves, move(from,to,piece,piece,b.squares[to]))
-          break
-        else
-          break
         end
       end
     end
@@ -333,22 +338,22 @@ function kingMoves(b::board; whitesmove=b.whitesmove)
     crossboard(b, pieces, whitesmove, increments, false)
 end
 
-function castlingMoves(b::board; whitesmove=b.whitesmove)
+function castlingMoves(b::board, possible::Array{moves,1}; whitesmove=b.whitesmove)
     mymoves = moves[]
     pieces = ifelse(whitesmove, whiteking, blackking)
     unmoved(piece) = !(piece in [m.oldpc for m in b.moves])
     if whitesmove
-        if unmoved(1) && unmoved(5) && isempty(4,b) && isempty(3,b) && isempty(2,b)
+        if (move(05,04,05,05,NOSQ) in possible) && (move(01,04,01,01,NOSQ) in possible) && unmoved(01) && unmoved(05)
             push!(mymoves, castle(05,03,05,01,04,01))
         end
-        if unmoved(8) && unmoved(5) && isempty(6,b) && isempty(7,b)
+        if (move(05,06,05,05,NOSQ) in possible) && (move(08,06,08,08,NOSQ) in possible) && unmoved(05) && unmoved(08)
             push!(mymoves, castle(05,07,05,08,06,08))
         end
     else
-        if unmoved(57) && unmoved(61) && isempty(60,b) && isempty(59,b) && isempty(58,b)
+        if (move(61,60,61,61,NOSQ) in possible) && (move(57,60,57,57,NOSQ) in possible) && unmoved(57) && unmoved(61)
             push!(mymoves, castle(61,59,61,57,60,57))
         end
-        if unmoved(64) && unmoved(61) && isempty(62,b) && isempty(63,b)
+        if (move(61,62,61,61,NOSQ) in possible) && (move(64,62,64,64,NOSQ) in possible) && unmoved(64) && unmoved(61)
             push!(mymoves, castle(61,63,61,64,62,64))
         end
     end
@@ -357,8 +362,8 @@ end
 
 function possiblemoves(b::board)
     possible = [pawnMoves(b); rookMoves(b); knightMoves(b); 
-                bishopMoves(b); queenMoves(b); kingMoves(b);
-                castlingMoves(b)]
+                bishopMoves(b); queenMoves(b); kingMoves(b)]
+    possible = [possible; castlingMoves(b,possible)]
     return possible
 end
 
@@ -468,7 +473,7 @@ end
 
 function show(b::board)
   taken = find((x)->x==NOSQ,b.pieces[1:64])
-  blackTaken = [pieces[x] for x in taken[taken.>16]]
+  blackTaken = [pieces[x] for x in taken[taken.>32]]
   whiteTaken = [pieces[x] for x in taken[taken.<17]]
   blackPrisoners = join(whiteTaken,", ")
   whitePrisoners = join(blackTaken,", ")
