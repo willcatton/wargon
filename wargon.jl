@@ -6,8 +6,11 @@ import Base.isempty
 
 """
 To do:
- - 3-in-a-row rule...
+ - ifelse(a,b,c) -> a ? b : c
+ - pass board value changes down via apply!
+ - blocking pieces and no need to check square is in range
  - en passent
+ - 3-in-a-row rule...
  - use a hash table - https://en.wikipedia.org/wiki/Hash_table - storing board evaluations at a given depth.
  - Serialize board. Hash result. Create a hash table mapping from hash start to [white_in_check, black_in_check]
  - get parallel threads running + computer thinking while human is thinking.
