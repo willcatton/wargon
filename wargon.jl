@@ -6,6 +6,7 @@ import Base.isempty
 
 """
 To do:
+ - if no moves but not in check, it's a draw.
  - ifelse(a,b,c) -> a ? b : c
  - pass board value changes down via apply!
  - blocking pieces and no need to check square is in range
