@@ -6,19 +6,18 @@ import Base.isempty
 
 """
 To do:
- - if no moves but not in check, it's a draw.
- - ifelse(a,b,c) -> a ? b : c
- - apply! and takeback! can update board piece points
+ - If no moves but not in check, it's a draw.
+ - apply! and takeback! update board piece points for potential speedup
  - Pawn structure, castling and king/rook unmoved board points
  - Blocking pieces and no need to check square is in range
  - En passent
  - Three-in-a-row rule...
- - use a hash table - https://en.wikipedia.org/wiki/Hash_table
- - serialize board. Hash result. Table mapping from hash start to [...]
- - get parallel threads running + computer thinking while human is thinking.
- - iterative deepening
- - null moves and quiescence search
- - deep learning static evaluator
+ - Use a hash table - https://en.wikipedia.org/wiki/Hash_table
+ - Serialize board. Hash result. Table mapping from hash start to [...]
+ - Get parallel threads running + computer thinking while human is thinking.
+ - Iterative deepening
+ - Null moves and quiescence search
+ - Deep learning static evaluator
 """
 
 abstract type moves end
