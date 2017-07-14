@@ -209,6 +209,9 @@ iswhite(piece) = piece[1]=='w'
 
 function tomove(b::board)
   function _tomove(m)
+    if length(m) == 4
+        m = string(m[1:2],":",m[3:4])
+    end
     fromcol,fromrow,tocol,torow = colnum(m[1]),parse(Int,m[2]),colnum(m[4]),parse(Int,m[5])
     from = fromcol + 8*(fromrow-1)
     to = tocol + 8*(torow-1)
@@ -512,9 +515,13 @@ show(m::moves) = string(square(m.oldsq),ifelse(m.takes!=NOSQ,"x",":"),square(m.n
 show(m::castle) = string(square(m.oldsq),":",square(m.newsq))
 show(m::promote) = string(square(m.oldsq),ifelse(m.takes!=NOSQ,"x",":"),square(m.newsq),":",ifelse(25<=m.newpc<=42,"N","Q"))
 
-function checkmate(b)
-    winner = ifelse(!b.whitesmove,"WHITE","BLACK")
-    return "$winner WINS!"
+function gameover(b)
+    winner = ifelse(b.whitesmove,"BLACK","WHITE")
+    if incheck(b, b.whitesmove)
+        return "$winner WINS!"
+    else
+        return "DRAWN GAME!"
+    end
 end
 
 function play(b; autoplay=false)
@@ -525,10 +532,10 @@ function play(b; autoplay=false)
       if !autoplay && b.whitesmove
         print(b)
         if length(allowed) == 0
-           return checkmate(b)
+           return gameover(b)
         end
         mstr = input("\n> ")
-        assert(mstr in map(show, allowed))
+        assert(tomove(b)(mstr) in allowed)
         m = tomove(b)(mstr)
         apply!(b, m)
       end
@@ -537,7 +544,7 @@ function play(b; autoplay=false)
       allowed = allowedmoves(b2)
       tic = time()
       if length(allowed) == 0
-         return checkmate(b2)
+         return gameover(b2)
       end
       m, s = alphabeta(b2, LEVEL, -Inf, Inf, b2.whitesmove; toconsider=shuffle(allowed))
       toc = time()
