@@ -57,6 +57,12 @@ function ==(m1::moves,m2::moves)
    (m1.newpc==m2.newpc) && 
    (m1.takes==m2.takes))
 end
+function ==(m1::castle,m2::castle)
+  ((typeof(m1)==typeof(m2)) &&
+   (m1.oldsq==m2.oldsq) &&
+   (m1.newsq==m2.newsq) &&
+   (m1.oldpc==m2.oldpc))
+end
 function apply!(b::board, m::move)
   b.pieces[m.oldpc]=NOSQ
   b.pieces[m.newpc]=m.newsq
