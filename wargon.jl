@@ -6,16 +6,15 @@ import Base.isempty
 
 """
 To do:
+ - Iterative deepening
  - apply! and takeback! update board piece points for potential speedup
  - Pawn structure, castling and king/rook unmoved board points
  - Blocking pieces and no need to check square is in range
  - En passent
  - Three-in-a-row rule...
- - Use a hash table - https://en.wikipedia.org/wiki/Hash_table
- - Serialize board. Hash result. Table mapping from hash start to [...]
+ - Serialize board -> hash table - https://en.wikipedia.org/wiki/Hash_table
  - Get parallel threads running + computer thinking while human is thinking.
- - Iterative deepening
- - Null moves and quiescence search
+ - Null moves + quiescence search
  - Deep learning static evaluator
 """
 
@@ -410,7 +409,6 @@ function alphabeta(bi::board, depth, α, β, whitesmove; toconsider=moves[])
     mb, v = move(0, 0, 0, 0, NOSQ), -Inf
     for mi in toconsider
       apply!(bi, mi)
-      assert(bi.whitesmove==false)
       mr, s = alphabeta(bi,depth-1,α,β,false)
       takeback!(bi)
       if s > v
@@ -432,7 +430,6 @@ function alphabeta(bi::board, depth, α, β, whitesmove; toconsider=moves[])
     mb, v = move(0, 0, 0, 0, NOSQ), +Inf
     for mi in toconsider
       apply!(bi, mi)
-      assert(bi.whitesmove==true)
       mr, s = alphabeta(bi,depth-1,α,β,true)
       takeback!(bi)
       if s < v
@@ -575,6 +572,7 @@ function replay(b::board)
     b2 = newboard()
     moves = reverse(deepcopy(b.moves))
     while length(moves) > 0
+      try
         m = pop!(moves)
         println("> $(show(m))")
         apply!(b2, m)
@@ -583,6 +581,9 @@ function replay(b::board)
             println("\nReplay mode: press enter for next move")
             readline()
         end
+      catch
+        return b2
+      end
     end
     println("That's all folks!")
 end
