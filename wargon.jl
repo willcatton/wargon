@@ -6,7 +6,6 @@ import Base.isempty
 
 """
 To do:
- - If no moves but not in check, it's a draw.
  - apply! and takeback! update board piece points for potential speedup
  - Pawn structure, castling and king/rook unmoved board points
  - Blocking pieces and no need to check square is in range
@@ -535,9 +534,15 @@ function play(b; autoplay=false)
            return gameover(b)
         end
         mstr = input("\n> ")
-        assert(tomove(b)(mstr) in allowed)
-        m = tomove(b)(mstr)
-        apply!(b, m)
+        if mstr in ["back","takeback","undo"]
+            takeback!(b); takeback!(b)
+            println("\nYa cheetah! Rewinding your last move...")
+            continue
+        else
+            assert(tomove(b)(mstr) in allowed)
+            m = tomove(b)(mstr)
+            apply!(b, m)
+        end
       end
       print(b)
       b2 = deepcopy(b)
@@ -564,6 +569,22 @@ function play(b; autoplay=false)
       println("Incorrect move. Try again...")
     end
   end
+end
+
+function replay(b::board)
+    b2 = newboard()
+    moves = reverse(deepcopy(b.moves))
+    while length(moves) > 0
+        m = pop!(moves)
+        println("> $(show(m))")
+        apply!(b2, m)
+        print(b2)
+        if length(moves) > 0
+            println("\nReplay mode: press enter for next move")
+            readline()
+        end
+    end
+    println("That's all folks!")
 end
 
 b = try
