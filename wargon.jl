@@ -6,64 +6,85 @@ import Base.isempty
 
 """
 To do:
- - Iterative deepening
  - apply! and takeback! update board piece points for potential speedup
- - Pawn structure, castling and king/rook unmoved board points
+ - Pawn structure, castling, ratio of points and king/rook unmoved board points
  - Blocking pieces and no need to check square is in range
- - En passent
- - Three-in-a-row rule...
+ - En passent + Three-in-a-row rule...
  - Serialize board -> hash table - https://en.wikipedia.org/wiki/Hash_table
  - Get parallel threads running + computer thinking while human is thinking.
  - Null moves + quiescence search
- - Deep learning static evaluator
+ - Neural net static evaluator
 """
+
+LEVEL = 3
+ITDEEP = 1
+VERBOSE = false
+NOCATCH = false
+HTSIZE = 100000
+AUTOPLAY = true
 
 abstract type moves end
 
 type move <: moves
-  oldsq::Int8
-  newsq::Int8
-  oldpc::Int8
-  newpc::Int8
-  takes::Int8
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  newpc::Int
+end
+type take <: moves
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  newpc::Int
+  takes::Int
 end
 type castle <: moves
-  oldsq::Int8
-  newsq::Int8
-  oldpc::Int8
-  oldsq2::Int8
-  newsq2::Int8
-  oldpc2::Int8
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  oldsq2::Int
+  newsq2::Int
+  oldpc2::Int
 end
 type promote <: moves
-  oldsq::Int8
-  newsq::Int8
-  oldpc::Int8
-  newpc::Int8
-  takes::Int8
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  newpc::Int
+  takes::Int
 end
+==(m1::moves,m2::moves) = ((typeof(m1)==typeof(m2)) && (m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) &&
+                           (m1.oldpc==m2.oldpc) && (m1.newpc==m2.newpc) && (m1.takes==m2.takes))
+==(m1::move,m2::move) = ((m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) && (m1.oldpc==m2.oldpc) && (m1.newpc==m2.newpc))
+==(m1::castle,m2::castle) = ((m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) && (m1.oldpc==m2.oldpc))
 type board
-  squares::Array{Int8,1}
-  pieces::Array{Int8,1}
+  squares::Array{Int,1}
+  pieces::Array{Int,1}
   moves::Array{moves,1}
-  value::Int64
+  whitepoints::Int
+  blackpoints::Int
   whitesmove::Bool
 end
-function ==(m1::moves,m2::moves)
-  ((typeof(m1)==typeof(m2)) && 
-   (m1.oldsq==m2.oldsq) && 
-   (m1.newsq==m2.newsq) && 
-   (m1.oldpc==m2.oldpc) && 
-   (m1.newpc==m2.newpc) && 
-   (m1.takes==m2.takes))
+function newboard()
+  squares = [collect(1:16); NOSQ*ones(Int,32); collect(49:64)]
+  pieces = [collect(1:16); zeros(Int,32); collect(49:64); 0]
+  moves = Array{move,1}()
+  whitepoints = +1039
+  blackpoints = -1039
+  whitesmove = true
+  board(squares,pieces,moves,whitepoints,blackpoints,whitesmove)
 end
-function ==(m1::castle,m2::castle)
-  ((typeof(m1)==typeof(m2)) &&
-   (m1.oldsq==m2.oldsq) &&
-   (m1.newsq==m2.newsq) &&
-   (m1.oldpc==m2.oldpc))
-end
+value(b::board) = sum(VALUES[b.pieces .!= NOSQ])
 function apply!(b::board, m::move)
+  b.pieces[m.oldpc]=NOSQ
+  b.pieces[m.newpc]=m.newsq
+  b.squares[m.oldsq]=NOSQ
+  b.squares[m.newsq]=m.newpc
+  b.whitesmove=!b.whitesmove
+  push!(b.moves,m)
+  return
+end
+function apply!(b::board, m::take)
   b.pieces[m.oldpc]=NOSQ
   b.pieces[m.newpc]=m.newsq
   b.squares[m.oldsq]=NOSQ
@@ -95,14 +116,17 @@ function apply!(b::board, m::promote)
   return
 end
 function takeback!(b::board, m::move)
-  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc)
+  apply!(b, undo)
+  pop!(b.moves)
+end
+function takeback!(b::board, m::take)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc)
   taken = m.takes
   apply!(b, undo)
   pop!(b.moves)
-  if taken != NOSQ
-    b.pieces[taken] = undo.oldsq
-    b.squares[undo.oldsq] = taken
-  end
+  b.pieces[taken] = undo.oldsq
+  b.squares[undo.oldsq] = taken
 end
 function takeback!(b::board, m::castle)
   undo = castle(m.newsq, m.oldsq, m.oldpc, m.newsq2, m.oldsq2, m.oldpc2)
@@ -111,7 +135,7 @@ function takeback!(b::board, m::castle)
   return
 end
 function takeback!(b::board, m::promote)
-  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc,NOSQ)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc)
   taken = m.takes
   apply!(b, undo)
   pop!(b.moves)
@@ -125,9 +149,9 @@ function takeback!(b::board)
   takeback!(b, m)
 end
 
-LEVEL = 4
-VERBOSE = false
-NOCATCH = false
+LOOKUPTABLE = 99999*ones(Int,HTSIZE,LEVEL)
+hashboard(b::board) = reinterpret(Int,hash(b.squares)+hash(b.whitesmove)) % div(HTSIZE,2) + div(HTSIZE,2) + 1
+
 NOSQ = 65
 whitepawn = [09,10,11,12,13,14,15,16]
 blackpawn = [49,50,51,52,53,54,55,56]
@@ -145,28 +169,6 @@ castlingmoves = [castle(05,03,05,01,04,01), castle(05,07,05,08,06,08), castle(61
 
 print(io::IO, b::board) = show(io, b)
 show(io::IO, b::board) = print(io, b)
-
-function newboard()
-  squares = [collect(1:16); NOSQ*ones(Int32,32); collect(49:64)]
-  pieces = [collect(1:16); zeros(Int,32); collect(49:64); 0]
-  moves = Array{move,1}()
-  value = 0
-  whitesmove = true
-  board(squares,pieces,moves,value,whitesmove)
-end
-
-function value(b)
-  values = [+5;+3;+3;+9;+1000;+3;+3;+5;
-            +1*ones(Int,8);
-            +9*ones(Int,8);
-            +3*ones(Int,8);
-            -3*ones(Int,8);
-            -9*ones(Int,8);
-            -ones(Int32,8);
-            -5;-3;-3;-9;-1000;-3;-3;-5;
-            0]
-  return sum(values[b.pieces .!= NOSQ])
-end
 
 up(x) = x<1||x>57 ? 0 : x+8
 down(x) = x<9||x>64 ? 0 : x-8
@@ -194,7 +196,7 @@ iswhite(x, board) = 0<x<65 && 0<board.squares[x]<17
 isblack(x, board) = 0<x<65 && 48<board.squares[x]<NOSQ
 
 # string manipulations down here
-pieces = ["wR","wN","wB","wQ","wK","wB","wN","wR",
+PIECES = ["wR","wN","wB","wQ","wK","wB","wN","wR",
           "wP","wP","wP","wP","wP","wP","wP","wP",
           "wQ","wQ","wQ","wQ","wQ","wQ","wQ","wQ",
           "wN","wN","wN","wN","wN","wN","wN","wN",
@@ -203,6 +205,43 @@ pieces = ["wR","wN","wB","wQ","wK","wB","wN","wR",
           "bP","bP","bP","bP","bP","bP","bP","bP",
           "bR","bN","bB","bQ","bK","bB","bN","bR",
           "  "]
+VALUES = [+5;+3;+3;+9;+1000;+3;+3;+5;
+          +1*ones(Int,8);
+          +9*ones(Int,8);
+          +3*ones(Int,8);
+          -3*ones(Int,8);
+          -9*ones(Int,8);
+          -ones(Int,8);
+          -5;-3;-3;-9;-1000;-3;-3;-5;
+          0]
+
+# new board representation with stones
+NEWPIECES = ["OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
+             "OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
+             "OO","wR","wN","wB","wQ","wK","wB","wN","wR","OO",
+             "OO","wP","wP","wP","wP","wP","wP","wP","wP","OO",
+             "OO","wQ","wQ","wQ","wQ","wQ","wQ","wQ","wQ","OO",
+             "OO","wN","wN","wN","wN","wN","wN","wN","wN","OO",
+             "OO","bN","bN","bN","bN","bN","bN","bN","bN","OO",
+             "OO","bQ","bQ","bQ","bQ","bQ","bQ","bQ","bQ","OO",
+             "OO","bP","bP","bP","bP","bP","bP","bP","bP","OO",
+             "OO","bR","bN","bB","bQ","bK","bB","bN","bR","OO",
+             "OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
+             "OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
+             "  "]
+NEWVALUES = [zeros(Int,10);
+             zeros(Int,10);
+             0;+5;+3;+3;+9;+1000;+3;+3;+5;0;
+             0;+1*ones(Int,8);0;
+             0;+9*ones(Int,8);0;
+             0;+3*ones(Int,8);0;
+             0;-3*ones(Int,8);0;
+             0;-9*ones(Int,8);0;
+             0;-ones(Int,8);0;
+             0;-5;-3;-3;-9;-1000;-3;-3;-5;0;
+             zeros(Int,10);
+             zeros(Int,10);
+             0]
 colstr(x) = ["A","B","C","D","E","F","G","H"][col(x)]
 colnum(x) = parse(Int, x) - 9
 rowstr(x) = string(row(x))
@@ -219,7 +258,8 @@ function tomove(b::board)
     fromcol,fromrow,tocol,torow = colnum(m[1]),parse(Int,m[2]),colnum(m[4]),parse(Int,m[5])
     from = fromcol + 8*(fromrow-1)
     to = tocol + 8*(torow-1)
-    piece=b.squares[from]
+    piece = b.squares[from]
+    takes = b.squares[to]
     if piece in [whiteking; blackking]
         if abs(from-to)==2
             return first([x for x in castlingmoves if x.oldsq==from && x.newsq==to])
@@ -235,7 +275,11 @@ function tomove(b::board)
             return promote(from,to,piece,newpc,b.squares[to])
         end
     end
-    return move(from,to,piece,piece,b.squares[to])
+    if takes == NOSQ
+      return move(from,to,piece,piece)
+    else
+      return take(from,to,piece,piece,takes)
+    end
   end
 end
 
@@ -255,11 +299,11 @@ function pawnMoves(b::board; whitesmove=b.whitesmove)
           push!(mymoves,promote(from,to,piece,piece-08,NOSQ))
           push!(mymoves,promote(from,to,piece,piece-16,NOSQ))
         else
-          push!(mymoves,move(from,to,piece,piece,NOSQ))
+          push!(mymoves,move(from,to,piece,piece))
         end
         to = inc(to)
         if pawnUnmoved(piece,b) && isempty(to,b)
-          push!(mymoves,move(from,to,piece,piece,NOSQ))
+          push!(mymoves,move(from,to,piece,piece))
         end
       end
       for to in [inc(left(from)), inc(right(from))]
@@ -271,7 +315,7 @@ function pawnMoves(b::board; whitesmove=b.whitesmove)
             push!(mymoves,promote(from,to,piece,piece-08,b.squares[to]))
             push!(mymoves,promote(from,to,piece,piece-16,b.squares[to]))
           else
-            push!(mymoves,move(from,to,piece,piece,b.squares[to]))
+            push!(mymoves,take(from,to,piece,piece,b.squares[to]))
           end
         end
       end
@@ -281,7 +325,7 @@ function pawnMoves(b::board; whitesmove=b.whitesmove)
 end
 
 function knightMoves(b::board; whitesmove=b.whitesmove)
-  mymoves = move[]
+  mymoves = moves[]
   pieces = whitesmove ? whiteknight : blackknight
   for piece in pieces
     from = b.pieces[piece]
@@ -289,9 +333,9 @@ function knightMoves(b::board; whitesmove=b.whitesmove)
       for m in [upUpLeft upUpRight upLeftLeft upRightRight downLeftLeft downRightRight downDownLeft downDownRight]
         to = m(from)
         if isempty(to,b)
-          push!(mymoves,move(from,to,piece,piece,NOSQ))
+          push!(mymoves,move(from,to,piece,piece))
         elseif isopposite(whitesmove,to,b)
-          push!(mymoves,move(from,to,piece,piece,b.squares[to]))
+          push!(mymoves,take(from,to,piece,piece,b.squares[to]))
         end
       end
     end
@@ -300,7 +344,7 @@ function knightMoves(b::board; whitesmove=b.whitesmove)
 end
 
 function crossboard(b::board, pieces, whitesmove, increments, multistep)
-  mymoves = move[]
+  mymoves = moves[]
   for piece in pieces
     from = b.pieces[piece]
     if from != NOSQ
@@ -309,12 +353,12 @@ function crossboard(b::board, pieces, whitesmove, increments, multistep)
         while true
           to = inc(to)
           if isempty(to,b)
-            push!(mymoves, move(from,to,piece,piece,NOSQ))
+            push!(mymoves,move(from,to,piece,piece))
             if !multistep
               break
             end
           elseif isopposite(whitesmove,to,b)
-            push!(mymoves, move(from,to,piece,piece,b.squares[to]))
+            push!(mymoves,take(from,to,piece,piece,b.squares[to]))
             break
           else
             break
@@ -355,18 +399,26 @@ function castlingMoves(b::board, possible::Array{moves,1}; whitesmove=b.whitesmo
     pieces = whitesmove ? whiteking : blackking
     unmoved(piece) = !(piece in [m.oldpc for m in b.moves])
     if whitesmove && unmoved(05)
-        if (move(05,04,05,05,NOSQ) in possible) && (move(01,04,01,01,NOSQ) in possible) && unmoved(01)
-            push!(mymoves, castle(05,03,05,01,04,01))
+        if (move(05,04,05,05) in possible) && (move(01,04,01,01) in possible) && unmoved(01)
+            #if !incheck(b, whitesmove)
+                push!(mymoves, castle(05,03,05,01,04,01))
+            #end
         end
-        if (move(05,06,05,05,NOSQ) in possible) && (move(08,06,08,08,NOSQ) in possible) && unmoved(08)
-            push!(mymoves, castle(05,07,05,08,06,08))
+        if (move(05,06,05,05) in possible) && (move(08,06,08,08) in possible) && unmoved(08)
+            #if !incheck(b, whitesmove)
+                push!(mymoves, castle(05,07,05,08,06,08))
+            #end
         end
     elseif !whitesmove && unmoved(61)
-        if (move(61,60,61,61,NOSQ) in possible) && (move(57,60,57,57,NOSQ) in possible) && unmoved(57)
-            push!(mymoves, castle(61,59,61,57,60,57))
+        if (move(61,60,61,61) in possible) && (move(57,60,57,57) in possible) && unmoved(57)
+            #if !incheck(b, whitesmove)
+                push!(mymoves, castle(61,59,61,57,60,57))
+            #end
         end
-        if (move(61,62,61,61,NOSQ) in possible) && (move(64,62,64,64,NOSQ) in possible) && unmoved(64)
-            push!(mymoves, castle(61,63,61,64,62,64))
+        if (move(61,62,61,61) in possible) && (move(64,62,64,64) in possible) && unmoved(64)
+            #if !incheck(b, whitesmove)
+                push!(mymoves, castle(61,63,61,64,62,64))
+            #end
         end
     end
     return mymoves
@@ -404,56 +456,54 @@ function allowedmoves(b::board)
     [m for m in possiblemoves(b) if !(intocheck(b, m))]
 end 
 
-function alphabeta(bi::board, depth, α, β, whitesmove; toconsider=moves[])
-  if length(toconsider)==0
-    toconsider = shuffle(possiblemoves(bi))
-  end
+function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
+  prescribed = length(options) !== 0
+  toconsider = prescribed ? options : possiblemoves(bi)
   if depth == 0
-    return move(0, 0, 0, 0, NOSQ), value(bi)
+    return move(0, 0, 0, 0), value(bi)
   end
   if whitesmove
-    mb, v = move(0, 0, 0, 0, NOSQ), -Inf
+    mb, vb = move(0, 0, 0, 0), -Inf
     for mi in toconsider
       apply!(bi, mi)
       mr, s = alphabeta(bi,depth-1,α,β,false)
       takeback!(bi)
-      if s > v
-        v, mb = s, mi
+      if s > vb
+        vb, mb = s, mi
       end
-      α = max(α, v)
+      α = max(α, vb)
       if β <= α
         break
       end
     end
-    if VERBOSE
-      try
-        println("whitesmove: ",depth," :  ","    "^(3-depth),show(mb), " : ", v, " α=$α β=$β")
-      catch
-      end
-    end
-    return mb, v
+    VERBOSE && println("whitesmove: ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
+    return mb, vb
   else
-    mb, v = move(0, 0, 0, 0, NOSQ), +Inf
+    mb, vb = move(0, 0, 0, 0), +Inf
     for mi in toconsider
       apply!(bi, mi)
       mr, s = alphabeta(bi,depth-1,α,β,true)
       takeback!(bi)
-      if s < v
-        v, mb = s, mi
+      if s < vb
+        vb, mb = s, mi
       end
-      β = min(β, v)
+      β = min(β, vb)
       if β <= α
         break
       end
     end
-    if VERBOSE
-      try
-        println("blacksmove ",depth," :  ","    "^(3-depth),show(mb), " : ", v, " α=$α β=$β")
-      catch
-      end
-    end
-    return mb, v
+    VERBOSE && println("blacksmove ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
+    return mb, vb
   end
+end
+
+function iterativelydeepen(b::board, depth, iterations; options=moves[])
+    m, s = move(0, 0, 0, 0), -Inf
+    for i in 1:iterations
+        VERBOSE && println("Running alphabeta at $(LEVEL-iterations+i) ply")
+        m, s = alphabeta(b, LEVEL-iterations+i, -Inf, Inf, b.whitesmove; options=options)
+    end
+    return m, s
 end
 
 function input(prompt::AbstractString="")
@@ -476,15 +526,15 @@ end
 
 function show(b::board)
   taken = find((x)->x==NOSQ,b.pieces[1:64])
-  blackTaken = [pieces[x] for x in taken[taken.>32]]
-  whiteTaken = [pieces[x] for x in taken[taken.<17]]
+  blackTaken = [PIECES[x] for x in taken[taken.>32]]
+  whiteTaken = [PIECES[x] for x in taken[taken.<17]]
   blackPrisoners = join(whiteTaken,", ")
   whitePrisoners = join(blackTaken,", ")
   print_with_color(:red,"\n   =========================\n")
   for row in 8:-1:1
     print_with_color(:blue, "$row | ")
     for col in 1:8
-      piecestr = pieces[b.squares[col+(row-1)*8]]
+      piecestr = PIECES[b.squares[col+(row-1)*8]]
        if piecestr=="  " 
          if (row+col)%2 == 0
            print(":: ")
@@ -513,7 +563,8 @@ function show(io::IO, b::board)
   print("$(length(allowedmoves(b))) available moves: \n  $(showmoves(b))\n")
 end
 
-show(m::moves) = string(square(m.oldsq),ifelse(m.takes!=NOSQ,"x",":"),square(m.newsq))
+show(m::move) = string(square(m.oldsq),":",square(m.newsq))
+show(m::take) = string(square(m.oldsq),"x",square(m.newsq))
 show(m::castle) = string(square(m.oldsq),":",square(m.newsq))
 show(m::promote) = string(square(m.oldsq),ifelse(m.takes!=NOSQ,"x",":"),square(m.newsq),":",ifelse(25<=m.newpc<=42,"N","Q"))
 
@@ -530,6 +581,7 @@ function play(b; autoplay=false)
   while true
     b2 = deepcopy(b)
     allowed = allowedmoves(b)
+    tic = time()
     try
       if !autoplay && b.whitesmove
         print(b)
@@ -544,17 +596,20 @@ function play(b; autoplay=false)
         else
             assert(tomove(b)(mstr) in allowed)
             m = tomove(b)(mstr)
+            toc = time()
+            elapsed = Base.Dates.Second(round(toc-tic))
+            print(show(m)," elapsed time: $elapsed\n")
             apply!(b, m)
         end
       end
       print(b)
       b2 = deepcopy(b)
-      allowed = allowedmoves(b2)
+      allowed = shuffle(allowedmoves(b2))
       tic = time()
       if length(allowed) == 0
          return gameover(b2)
       end
-      m, s = alphabeta(b2, LEVEL, -Inf, Inf, b2.whitesmove; toconsider=shuffle(allowed))
+      m, s = iterativelydeepen(b2, LEVEL, ITDEEP; options=allowed)
       toc = time()
       elapsed = Base.Dates.Second(round(toc-tic))
       print("\n> ",show(m)," elapsed time: $elapsed\n")
@@ -599,4 +654,4 @@ b = try
 catch
    newboard()
 end
-play(b, autoplay=false)
+play(b, autoplay=AUTOPLAY)
