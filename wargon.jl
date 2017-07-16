@@ -16,8 +16,8 @@ To do:
  - Neural net static evaluator
 """
 
-LEVEL = 3
-LEVELS(whitesmove) = whitesmove ? 3 : 4
+LEVEL = 4
+LEVELS(whitesmove) = whitesmove ? 4 : 5
 ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
@@ -502,7 +502,7 @@ function iterativelydeepen(b::board, depth, iterations; options=moves[])
     m, s = move(0, 0, 0, 0), -Inf
     for i in 1:iterations
         VERBOSE && println("Running alphabeta at $(LEVEL-iterations+i) ply")
-        m, s = alphabeta(b, LEVEL-iterations+i, -Inf, Inf, b.whitesmove; options=options)
+        m, s = alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=options)
     end
     return m, s
 end
