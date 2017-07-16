@@ -17,6 +17,7 @@ To do:
 """
 
 LEVEL = 3
+LEVELS(whitesmove) = whitesmove ? 3 : 4
 ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
@@ -192,8 +193,8 @@ pawnUnmoved(p,b) = ((9<=p<=16 || 49<=p<=56) && b.pieces[p]==p)
 row(x) = div((x-1)%64,8)+1
 col(x) = mod((x-1)%64,8)+1
 isempty(x, board) = 0<x<65 && board.squares[x]==NOSQ
-iswhite(x, board) = 0<x<65 && 0<board.squares[x]<17
-isblack(x, board) = 0<x<65 && 48<board.squares[x]<NOSQ
+iswhite(x, board) = 0<x<65 && 0<board.squares[x]<33
+isblack(x, board) = 0<x<65 && 32<board.squares[x]<NOSQ
 
 # string manipulations down here
 PIECES = ["wR","wN","wB","wQ","wK","wB","wN","wR",
@@ -609,7 +610,7 @@ function play(b; autoplay=false)
       if length(allowed) == 0
          return gameover(b2)
       end
-      m, s = iterativelydeepen(b2, LEVEL, ITDEEP; options=allowed)
+      m, s = iterativelydeepen(b2, LEVELS(b2.whitesmove), ITDEEP; options=allowed)
       toc = time()
       elapsed = Base.Dates.Second(round(toc-tic))
       print("\n> ",show(m)," elapsed time: $elapsed\n")
