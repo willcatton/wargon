@@ -17,7 +17,7 @@ To do:
 """
 
 LEVEL = 4
-LEVELS(whitesmove) = whitesmove ? 4 : 5
+LEVELS(whitesmove) = whitesmove ? 4 : 4
 ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
@@ -26,33 +26,33 @@ AUTOPLAY = true
 
 abstract type moves end
 
-type move <: moves
-  oldsq::Int
-  newsq::Int
-  oldpc::Int
-  newpc::Int
+immutable move <: moves
+  oldsq::UInt8
+  newsq::UInt8
+  oldpc::UInt8
+  newpc::UInt8
 end
-type take <: moves
-  oldsq::Int
-  newsq::Int
-  oldpc::Int
-  newpc::Int
-  takes::Int
+immutable take <: moves
+  oldsq::UInt8
+  newsq::UInt8
+  oldpc::UInt8
+  newpc::UInt8
+  takes::UInt8
 end
-type castle <: moves
-  oldsq::Int
-  newsq::Int
-  oldpc::Int
-  oldsq2::Int
-  newsq2::Int
-  oldpc2::Int
+immutable castle <: moves
+  oldsq::UInt8
+  newsq::UInt8
+  oldpc::UInt8
+  oldsq2::UInt8
+  newsq2::UInt8
+  oldpc2::UInt8
 end
-type promote <: moves
-  oldsq::Int
-  newsq::Int
-  oldpc::Int
-  newpc::Int
-  takes::Int
+immutable promote <: moves
+  oldsq::UInt8
+  newsq::UInt8
+  oldpc::UInt8
+  newpc::UInt8
+  takes::UInt8
 end
 ==(m1::moves,m2::moves) = ((typeof(m1)==typeof(m2)) && (m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) &&
                            (m1.oldpc==m2.oldpc) && (m1.newpc==m2.newpc) && (m1.takes==m2.takes))
