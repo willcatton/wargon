@@ -461,13 +461,13 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
   prescribed = length(options) !== 0
   toconsider = prescribed ? options : possiblemoves(bi)
   if depth == 0
-    return move(0, 0, 0, 0), value(bi)
+    return value(bi), move(0, 0, 0, 0)
   end
   if whitesmove
     mb, vb = move(0, 0, 0, 0), -Inf
     for mi in toconsider
       apply!(bi, mi)
-      mr, s = alphabeta(bi,depth-1,α,β,false)
+      s, mr = alphabeta(bi,depth-1,α,β,false)
       takeback!(bi)
       if s > vb
         vb, mb = s, mi
@@ -478,12 +478,12 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
       end
     end
     VERBOSE && println("whitesmove: ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
-    return mb, vb
+    return vb, mb
   else
     mb, vb = move(0, 0, 0, 0), +Inf
     for mi in toconsider
       apply!(bi, mi)
-      mr, s = alphabeta(bi,depth-1,α,β,true)
+      s, mr = alphabeta(bi,depth-1,α,β,true)
       takeback!(bi)
       if s < vb
         vb, mb = s, mi
@@ -494,7 +494,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
       end
     end
     VERBOSE && println("blacksmove ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
-    return mb, vb
+    return vb, mb
   end
 end
 
@@ -502,7 +502,10 @@ function iterativelydeepen(b::board, depth, iterations; options=moves[])
     m, s = move(0, 0, 0, 0), -Inf
     for i in 1:iterations
         VERBOSE && println("Running alphabeta at $(LEVEL-iterations+i) ply")
-        m, s = alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=options)
+        s, m = alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=options)
+        #s, m = @parallel (max) for option in options
+        #    alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=[option])
+        #end
     end
     return m, s
 end
@@ -583,7 +586,7 @@ function play(b; autoplay=false)
     b2 = deepcopy(b)
     allowed = allowedmoves(b)
     tic = time()
-    try
+    #try
       if !autoplay && b.whitesmove
         print(b)
         if length(allowed) == 0
@@ -616,17 +619,17 @@ function play(b; autoplay=false)
       print("\n> ",show(m)," elapsed time: $elapsed\n")
       sleep(1)
       apply!(b,m)
-    catch e
-      if NOCATCH
-        throw(e)
-      end
-      print(b)
-      if isa(e, InterruptException)
-        println("Breaking out of game")
-        break
-      end
-      println("Incorrect move. Try again...")
-    end
+    #catch e
+    #  if NOCATCH
+    #    throw(e)
+    #  end
+    #  print(b)
+    #  if isa(e, InterruptException)
+    #    println("Breaking out of game")
+    #    break
+    #  end
+    #  println("Incorrect move. Try again...")
+    #end
   end
 end
 
