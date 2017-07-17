@@ -6,6 +6,8 @@ import Base.isempty
 
 """
 To do:
+ - @code_native m+n
+ - @code_warntype m+n
  - apply! and takeback! update board piece points for potential speedup
  - Pawn structure, castling, ratio of points and king/rook unmoved board points
  - Blocking pieces and no need to check square is in range
