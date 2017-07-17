@@ -16,8 +16,8 @@ To do:
  - Neural net static evaluator
 """
 
-LEVEL = 4
-LEVELS(whitesmove) = whitesmove ? 4 : 4
+LEVEL = 3
+LEVELS(whitesmove) = whitesmove ? 3 : 3
 ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
@@ -27,32 +27,32 @@ AUTOPLAY = true
 abstract type moves end
 
 immutable move <: moves
-  oldsq::UInt8
-  newsq::UInt8
-  oldpc::UInt8
-  newpc::UInt8
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  newpc::Int
 end
 immutable take <: moves
-  oldsq::UInt8
-  newsq::UInt8
-  oldpc::UInt8
-  newpc::UInt8
-  takes::UInt8
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  newpc::Int
+  takes::Int
 end
 immutable castle <: moves
-  oldsq::UInt8
-  newsq::UInt8
-  oldpc::UInt8
-  oldsq2::UInt8
-  newsq2::UInt8
-  oldpc2::UInt8
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  oldsq2::Int
+  newsq2::Int
+  oldpc2::Int
 end
 immutable promote <: moves
-  oldsq::UInt8
-  newsq::UInt8
-  oldpc::UInt8
-  newpc::UInt8
-  takes::UInt8
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  newpc::Int
+  takes::Int
 end
 ==(m1::moves,m2::moves) = ((typeof(m1)==typeof(m2)) && (m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) &&
                            (m1.oldpc==m2.oldpc) && (m1.newpc==m2.newpc) && (m1.takes==m2.takes))
@@ -77,7 +77,6 @@ function newboard()
 end
 value(b::board) = sum(VALUES[b.pieces .!= NOSQ])
 function apply!(b::board, m::move)
-  b.pieces[m.oldpc]=NOSQ
   b.pieces[m.newpc]=m.newsq
   b.squares[m.oldsq]=NOSQ
   b.squares[m.newsq]=m.newpc
@@ -86,7 +85,6 @@ function apply!(b::board, m::move)
   return
 end
 function apply!(b::board, m::take)
-  b.pieces[m.oldpc]=NOSQ
   b.pieces[m.newpc]=m.newsq
   b.squares[m.oldsq]=NOSQ
   b.squares[m.newsq]=m.newpc
@@ -97,10 +95,8 @@ function apply!(b::board, m::take)
 end
 function apply!(b::board, m::castle)
   b.squares[m.oldsq] = NOSQ
-  b.pieces[m.oldpc] = m.newsq
   b.squares[m.newsq] = m.oldpc
   b.squares[m.oldsq2] = NOSQ
-  b.pieces[m.oldpc2] = m.newsq2
   b.squares[m.newsq2] = m.oldpc2
   b.whitesmove=!b.whitesmove
   push!(b.moves,m)
@@ -187,6 +183,23 @@ downLeftLeft(x) = mod(x-10,8) in [0,7]||x<11||x>64 ? 0 : x-10
 downRightRight(x) = mod(x-6,8) in [1,2]||x<7||x>64 ? 0 : x-6
 downDownLeft(x) = mod(x-17,8)==0||x<18||x>64 ? 0 : x-17
 downDownRight(x) = mod(x-15,8)==1||x<16||x>64 ? 0 : x-15
+
+_up(x) = x+8
+_down(x) = x-8
+_left(x) = x-1
+_right(x) = x+1
+_upLeft(x) = x+7
+_upRight(x) = x+9
+_downLeft(x) = x-9
+_downRight(x) = x-7
+_upUpLeft(x) = x+15
+_upUpRight(x) = x+17
+_upLeftLeft(x) = x+6
+_upRightRight(x) = x+10
+_downLeftLeft(x) = x-10
+_downRightRight(x) = x-6
+_downDownLeft(x) = x-17
+_downDownRight(x) = x-15
 
 pawnUnmoved(p,b) = ((9<=p<=16 || 49<=p<=56) && b.pieces[p]==p)
 
@@ -586,7 +599,7 @@ function play(b; autoplay=false)
     b2 = deepcopy(b)
     allowed = allowedmoves(b)
     tic = time()
-    #try
+    try
       if !autoplay && b.whitesmove
         print(b)
         if length(allowed) == 0
@@ -619,17 +632,17 @@ function play(b; autoplay=false)
       print("\n> ",show(m)," elapsed time: $elapsed\n")
       sleep(1)
       apply!(b,m)
-    #catch e
-    #  if NOCATCH
-    #    throw(e)
-    #  end
-    #  print(b)
-    #  if isa(e, InterruptException)
-    #    println("Breaking out of game")
-    #    break
-    #  end
-    #  println("Incorrect move. Try again...")
-    #end
+    catch e
+      if NOCATCH
+        throw(e)
+      end
+      print(b)
+      if isa(e, InterruptException)
+        println("Breaking out of game")
+        break
+      end
+      println("Incorrect move. Try again...")
+    end
   end
 end
 
