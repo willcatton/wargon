@@ -6,8 +6,36 @@ import Base.isempty
 
 """
 To do:
+ - With bitboards, can keep things immutable: generate a new board. Easily track castling etc.
+ - bitboard gave about 40,000,000 movesearch + move [+ takeback] per second
+ - Never make a list of available moves. Just generate them and search straight away.
+ - Pawn structure evaluator idea: just play pawns forward without pieces.
+===========================
+ - immutable Moose
+     a::Int
+   end
+ - import Base.+ 
+ - +(m1::Moose, m2::Moose) = Moose(m1.a * m2.a)
+ - m = Moose(2)
+ - n = Moose(4)
+ - m+n 
  - @code_native m+n
  - @code_warntype m+n
+===========================
+import AMPSPdfs.DTPDFS.PDF
+f=PDF([1.],[6],[5 2 .5 1])
+function samplevariancetest(f)
+    s=Float64[]
+    for i=1:1000000
+        push!(s,quantile(f,rand()))
+    end
+  return abs(var(f)/var(s)-1)<0.01
+end
+samplevariancetest(f)
+using ProfileView
+@profile samplevariancetest(f)
+ProfileView.view()
+===========================
  - apply! and takeback! update board piece points for potential speedup
  - Pawn structure, castling, ratio of points and king/rook unmoved board points
  - Blocking pieces and no need to check square is in range
