@@ -22,6 +22,13 @@ To do:
  - @code_native m+n
  - @code_warntype m+n
 ===========================
+immutable Pieces
+   p::UInt8
+end
+immutable Board
+   b::UInt64
+end
+
 import AMPSPdfs.DTPDFS.PDF
 f=PDF([1.],[6],[5 2 .5 1])
 function samplevariancetest(f)
