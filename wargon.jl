@@ -28,7 +28,8 @@ end
 immutable Board
    b::UInt64
 end
-
+Use bitwise operators e.g. << to shift pieces around...
+===========================
 import AMPSPdfs.DTPDFS.PDF
 f=PDF([1.],[6],[5 2 .5 1])
 function samplevariancetest(f)
