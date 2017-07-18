@@ -6,6 +6,7 @@ import Base.isempty
 
 """
 To do:
+ - Provide take moves before move moves -> faster alphabeta cutoff?
  - With bitboards, can keep things immutable: generate a new board. Easily track castling etc.
  - bitboard gave about 40,000,000 movesearch + move [+ takeback] per second
  - Never make a list of available moves. Just generate them and search straight away.
@@ -54,8 +55,8 @@ ProfileView.view()
  - Neural net static evaluator
 """
 
-LEVEL = 3
-LEVELS(whitesmove) = whitesmove ? 3 : 3
+LEVEL = 4
+LEVELS(whitesmove) = whitesmove ? 4 : 4
 ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
