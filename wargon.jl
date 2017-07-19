@@ -8,9 +8,10 @@ import Base.isempty
 To do:
  - Provide take moves before move moves -> faster alphabeta cutoff?
  - With bitboards, can keep things immutable: generate a new board. Easily track castling etc.
- - bitboard gave about 40,000,000 movesearch + move [+ takeback] per second
+ - bitboard is giving about 40,000,000 movesearch + move [+ takeback] per second
  - Never make a list of available moves. Just generate them and search straight away.
  - Pawn structure evaluator idea: just play pawns forward without pieces.
+ - Generate dictionary of knight moves in advance.
 ===========================
  - immutable Moose
      a::Int
@@ -26,9 +27,20 @@ To do:
 immutable Pieces
    p::UInt8
 end
-immutable Board
+immutable BitBoard
    b::UInt64
 end
+x = reinterpret(Int, pawns.b)
+923847392231271730
+
+pawns = BitBoard(255 << 8)
+x = reinterpret(Int, pawns.b)
+for inc=1:64
+  print(x % 2)
+  x = div(x,2)
+end
+reverse(bin(pawns.b,64))
+
 Use bitwise operators e.g. << to shift pieces around...
 ===========================
 import AMPSPdfs.DTPDFS.PDF
