@@ -5,7 +5,7 @@ import Base.string
 import Base.isempty
 
 LEVEL = 5
-ITDEEP = 1
+ITDEEP = 3
 VERBOSE = false
 NOCATCH = false
 HTSIZE = 100000
@@ -49,6 +49,7 @@ type board
   squares::Array{Int,1}
   pieces::Array{Int,1}
   moves::Array{moves,1}
+  nocastling::Array{Int,1}
   whitepoints::Int
   blackpoints::Int
   whitesmove::Bool
@@ -57,10 +58,11 @@ function newboard()
   squares = [collect(1:16); NOSQ*ones(Int,32); collect(49:64)]
   pieces = [collect(1:16); zeros(Int,32); collect(49:64); 0]
   moves = Array{move,1}()
+  nocastling = zeros(Int,4)
   whitepoints = +1039
   blackpoints = -1039
   whitesmove = true
-  board(squares,pieces,moves,whitepoints,blackpoints,whitesmove)
+  board(squares,pieces,moves,nocastling,whitepoints,blackpoints,whitesmove)
 end
 value(b::board) = sum(VALUES[b.pieces .!= NOSQ])
 function apply!(b::board, m::move)
@@ -131,6 +133,24 @@ end
 
 LOOKUPTABLE = 99999*ones(Int,HTSIZE,LEVEL)
 hashboard(b::board) = reinterpret(Int,hash(b.squares)+hash(b.whitesmove)) % div(HTSIZE,2) + div(HTSIZE,2) + 1
+hashboard(b::board) = hash(b.squares) + hash(b.whitesmove)
+CACHE = try
+   CACHE
+catch
+   Dict{UInt,Dict{Int,Tuple{Int,moves}}}()
+end
+function store(hsh, ply, val)
+    if !haskey(CACHE, hsh)
+        CACHE[hsh] = Dict{Int,Tuple{Int,moves}}()
+    end
+    CACHE[hsh][ply] = val
+end
+function retrieve(hsh, ply)
+    if haskey(CACHE, hsh) && haskey(CACHE[hsh], ply)
+        return CACHE[hsh][ply]
+    end
+end
+
 
 NOSQ = 65
 whitepawn = [09,10,11,12,13,14,15,16]
@@ -145,7 +165,11 @@ whitequeen = [04,17,18,19,20,21,22,23,24]
 blackqueen = [60,41,42,43,44,45,46,47,48]
 whiteking = [05]
 blackking = [61]
-castlingmoves = [castle(05,03,05,01,04,01), castle(05,07,05,08,06,08), castle(61,59,61,57,60,57), castle(61,63,61,64,62,64)]
+
+castlingmoves = [castle(05,03,05,01,04,01), 
+                 castle(05,07,05,08,06,08), 
+                 castle(61,59,61,57,60,57), 
+                 castle(61,63,61,64,62,64)]
 
 print(io::IO, b::board) = show(io, b)
 show(io::IO, b::board) = print(io, b)
@@ -167,23 +191,6 @@ downRightRight(x::Int) = mod(x-6,8) in [1,2]||x<7||x>64 ? 0 : x-6
 downDownLeft(x::Int) = mod(x-17,8)==0||x<18||x>64 ? 0 : x-17
 downDownRight(x::Int) = mod(x-15,8)==1||x<16||x>64 ? 0 : x-15
 
-_up(x) = x+8
-_down(x) = x-8
-_left(x) = x-1
-_right(x) = x+1
-_upLeft(x) = x+7
-_upRight(x) = x+9
-_downLeft(x) = x-9
-_downRight(x) = x-7
-_upUpLeft(x) = x+15
-_upUpRight(x) = x+17
-_upLeftLeft(x) = x+6
-_upRightRight(x) = x+10
-_downLeftLeft(x) = x-10
-_downRightRight(x) = x-6
-_downDownLeft(x) = x-17
-_downDownRight(x) = x-15
-
 pawnUnmoved(p,b) = ((9<=p<=16 || 49<=p<=56) && b.pieces[p]==p)
 
 row(x) = div((x-1)%64,8)+1
@@ -192,10 +199,6 @@ col(x) = mod((x-1)%64,8)+1
 isempty(x::Int, b::board) = 0<x<65 && b.squares[x]==NOSQ
 iswhite(x::Int, b::board) = 0<x<65 && 0<b.squares[x]<33
 isblack(x::Int, b::board) = 0<x<65 && 32<b.squares[x]<NOSQ
-
-#isempty(x::Int, b::board) = b.squares[x]==NOSQ
-#iswhite(x::Int, b::board) = 0<b.squares[x]<33
-#isblack(x::Int, b::board) = 32<b.squares[x]<NOSQ
 
 # string manipulations down here
 PIECES = ["wR","wN","wB","wQ","wK","wB","wN","wR",
@@ -217,33 +220,6 @@ VALUES = [+5;+3;+3;+9;+1000;+3;+3;+5;
           -5;-3;-3;-9;-1000;-3;-3;-5;
           0]
 
-# new board representation with stones
-NEWPIECES = ["OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
-             "OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
-             "OO","wR","wN","wB","wQ","wK","wB","wN","wR","OO",
-             "OO","wP","wP","wP","wP","wP","wP","wP","wP","OO",
-             "OO","wQ","wQ","wQ","wQ","wQ","wQ","wQ","wQ","OO",
-             "OO","wN","wN","wN","wN","wN","wN","wN","wN","OO",
-             "OO","bN","bN","bN","bN","bN","bN","bN","bN","OO",
-             "OO","bQ","bQ","bQ","bQ","bQ","bQ","bQ","bQ","OO",
-             "OO","bP","bP","bP","bP","bP","bP","bP","bP","OO",
-             "OO","bR","bN","bB","bQ","bK","bB","bN","bR","OO",
-             "OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
-             "OO","OO","OO","OO","OO","OO","OO","OO","OO","OO",
-             "  "]
-NEWVALUES = [zeros(Int,10);
-             zeros(Int,10);
-             0;+5;+3;+3;+9;+1000;+3;+3;+5;0;
-             0;+1*ones(Int,8);0;
-             0;+9*ones(Int,8);0;
-             0;+3*ones(Int,8);0;
-             0;-3*ones(Int,8);0;
-             0;-9*ones(Int,8);0;
-             0;-ones(Int,8);0;
-             0;-5;-3;-3;-9;-1000;-3;-3;-5;0;
-             zeros(Int,10);
-             zeros(Int,10);
-             0]
 colstr(x) = ["A","B","C","D","E","F","G","H"][col(x)]
 colnum(x) = parse(Int, x) - 9
 rowstr(x) = string(row(x))
@@ -461,10 +437,17 @@ function allowedmoves(b::board)
 end 
 
 function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
+  hsh = hashboard(bi)
+  cch = retrieve(hsh, depth) 
+  if cch !== nothing
+    return cch
+  end
   prescribed = length(options) !== 0
   toconsider = prescribed ? options : possiblemoves(bi)
   if depth == 0
-    return value(bi), move(0, 0, 0, 0)
+    vb, mb = value(bi), move(0, 0, 0, 0)
+    store(hsh, depth, (vb, mb))
+    return vb, mb
   end
   if whitesmove
     mb, vb = move(0, 0, 0, 0), -Inf
@@ -472,7 +455,8 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
       apply!(bi, mi)
       push!(bi.moves, mi)
       s, mr = alphabeta(bi,depth-1,α,β,false)
-      takeback!(bi)
+      pop!(bi.moves)
+      takeback!(bi, mi)
       if s > vb
         vb, mb = s, mi
       end
@@ -482,6 +466,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
       end
     end
     VERBOSE && println("whitesmove: ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
+    store(hsh, depth, (vb, mb))
     return vb, mb
   else
     mb, vb = move(0, 0, 0, 0), +Inf
@@ -489,7 +474,8 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
       apply!(bi, mi)
       push!(bi.moves, mi)
       s, mr = alphabeta(bi,depth-1,α,β,true)
-      takeback!(bi)
+      pop!(bi.moves)
+      takeback!(bi, mi)
       if s < vb
         vb, mb = s, mi
       end
@@ -499,6 +485,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
       end
     end
     VERBOSE && println("blacksmove ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
+    store(hsh, depth, (vb, mb))
     return vb, mb
   end
 end
@@ -508,9 +495,6 @@ function iterativelydeepen(b::board, depth, iterations; options=moves[])
     for i in 1:iterations
         VERBOSE && println("Running alphabeta at $(LEVEL-iterations+i) ply")
         s, m = alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=options)
-        #s, m = @parallel (max) for option in options
-        #    alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=[option])
-        #end
     end
     return m, s
 end
