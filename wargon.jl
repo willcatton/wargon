@@ -13,6 +13,17 @@ To do:
  - Pawn structure evaluator idea: just play pawns forward without pieces.
  - Generate dictionary of knight moves in advance.
 ===========================
+julia> try
+          x == 2
+       catch err
+          f = open("/tmp/bad","w")
+          serialize(f, (1,2))
+          close(f)
+          throw(err)
+       end
+ERROR: UndefVarError: x not defined
+julia> open(deserialize, "/tmp/bad")
+===========================
  - immutable Moose
      a::Int
    end
@@ -67,7 +78,7 @@ ProfileView.view()
  - Neural net static evaluator
 """
 
-LEVEL = 5
+LEVEL = 4
 ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
