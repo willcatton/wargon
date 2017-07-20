@@ -437,13 +437,13 @@ function allowedmoves(b::board)
 end 
 
 function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
+  prescribed = length(options) !== 0
+  toconsider = prescribed ? options : possiblemoves(bi)
   hsh = hashboard(bi)
   cch = retrieve(hsh, depth) 
   if cch !== nothing
     return cch
   end
-  prescribed = length(options) !== 0
-  toconsider = prescribed ? options : possiblemoves(bi)
   if depth == 0
     vb, mb = value(bi), move(0, 0, 0, 0)
     store(hsh, depth, (vb, mb))
