@@ -465,7 +465,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
         break
       end
     end
-    VERBOSE && println("whitesmove: ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
+    VERBOSE && println("whitesmove: ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", vb, " α=$α β=$β")
     store(hsh, depth, (vb, mb))
     return vb, mb
   else
@@ -484,7 +484,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
         break
       end
     end
-    VERBOSE && println("blacksmove ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", v, " α=$α β=$β")
+    VERBOSE && println("blacksmove ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", vb, " α=$α β=$β")
     store(hsh, depth, (vb, mb))
     return vb, mb
   end
