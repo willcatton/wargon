@@ -5,10 +5,9 @@ import Base.string
 import Base.isempty
 
 LEVEL = 5
-ITDEEP = 3
+ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
-HTSIZE = 100000
 AUTOPLAY = false
 
 abstract type moves end
@@ -131,14 +130,7 @@ function takeback!(b::board)
   takeback!(b, m)
 end
 
-LOOKUPTABLE = 99999*ones(Int,HTSIZE,LEVEL)
-hashboard(b::board) = reinterpret(Int,hash(b.squares)+hash(b.whitesmove)) % div(HTSIZE,2) + div(HTSIZE,2) + 1
 hashboard(b::board) = hash(b.squares) + hash(b.whitesmove)
-CACHE = try
-   CACHE
-catch
-   Dict{UInt,Dict{Int,Tuple{Int,moves}}}()
-end
 function store(hsh, ply, val)
     if !haskey(CACHE, hsh)
         CACHE[hsh] = Dict{Int,Tuple{Int,moves}}()
@@ -150,7 +142,11 @@ function retrieve(hsh, ply)
         return CACHE[hsh][ply]
     end
 end
-
+CACHE = try
+   CACHE
+catch
+   Dict{UInt,Dict{Int,Tuple{Int,moves}}}()
+end
 
 NOSQ = 65
 whitepawn = [09,10,11,12,13,14,15,16]
@@ -405,8 +401,8 @@ function castlingMoves(b::board, possible::Array{moves,1}; whitesmove=b.whitesmo
 end
 
 function possiblemoves(b::board)
-    possible = [pawnMoves(b); rookMoves(b); knightMoves(b); 
-                bishopMoves(b); queenMoves(b); kingMoves(b)]
+    possible = [pawnMoves(b); knightMoves(b); bishopMoves(b); 
+                rookMoves(b); queenMoves(b); kingMoves(b)]
     possible = [possible; castlingMoves(b,possible)]
     return possible
 end
@@ -444,13 +440,17 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
   if cch !== nothing
     return cch
   end
+  toconsider = [filter((x)->typeof(x)==promote, toconsider);
+                filter((x)->typeof(x)==take, toconsider);
+                filter((x)->typeof(x)==castle, toconsider)
+                filter((x)->typeof(x)==move, toconsider)]
   if depth == 0
     vb, mb = value(bi), move(0, 0, 0, 0)
     store(hsh, depth, (vb, mb))
     return vb, mb
   end
   if whitesmove
-    mb, vb = move(0, 0, 0, 0), -Inf
+    mb, vb = move(0, 0, 0, 0), -999999
     for mi in toconsider
       apply!(bi, mi)
       push!(bi.moves, mi)
@@ -469,7 +469,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
     store(hsh, depth, (vb, mb))
     return vb, mb
   else
-    mb, vb = move(0, 0, 0, 0), +Inf
+    mb, vb = move(0, 0, 0, 0), +999999
     for mi in toconsider
       apply!(bi, mi)
       push!(bi.moves, mi)
