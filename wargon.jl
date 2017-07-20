@@ -4,7 +4,7 @@ import Base.print
 import Base.string
 import Base.isempty
 
-LEVEL = 4
+LEVEL = 5
 ITDEEP = 1
 VERBOSE = false
 NOCATCH = false
@@ -284,6 +284,7 @@ function tomove(b::board)
 end
 
 # TODO: split back into whitePawnMoves and blackPawnMoves.
+pawnTakes(whitesMove) = whitesMove ? [upLeft upRight] : [downLeft downRight]
 function pawnMoves(b::board; whitesmove=b.whitesmove)
   mymoves = moves[]
   inc = whitesmove ? up : down
@@ -430,7 +431,7 @@ end
 function possiblemoves(b::board)
     possible = [pawnMoves(b); rookMoves(b); knightMoves(b); 
                 bishopMoves(b); queenMoves(b); kingMoves(b)]
-    possible = [possible; castlingMoves(b,possible)]
+    #possible = [possible; castlingMoves(b,possible)]
     return possible
 end
 
@@ -601,6 +602,9 @@ function play(b; autoplay=false)
             takeback!(b); takeback!(b)
             println("\nYa cheetah! Rewinding your last move...")
             continue
+        elseif mstr in ["auto","autoplay"]
+            AUTOPLAY = true
+            play(b, autoplay=true)
         else
             assert(tomove(b)(mstr) in allowed)
             m = tomove(b)(mstr)
