@@ -64,6 +64,7 @@ function newboard()
 end
 value(b::board) = sum(VALUES[b.pieces .!= NOSQ])
 function apply!(b::board, m::move)
+  b.pieces[m.oldpc]=NOSQ
   b.pieces[m.newpc]=m.newsq
   b.squares[m.oldsq]=NOSQ
   b.squares[m.newsq]=m.newpc
@@ -71,6 +72,7 @@ function apply!(b::board, m::move)
   return
 end
 function apply!(b::board, m::take)
+  b.pieces[m.oldpc]=NOSQ
   b.pieces[m.newpc]=m.newsq
   b.squares[m.oldsq]=NOSQ
   b.squares[m.newsq]=m.newpc
@@ -283,8 +285,6 @@ function tomove(b::board)
   end
 end
 
-# TODO: split back into whitePawnMoves and blackPawnMoves.
-pawnTakes(whitesMove) = whitesMove ? [upLeft upRight] : [downLeft downRight]
 function pawnMoves(b::board; whitesmove=b.whitesmove)
   mymoves = moves[]
   inc = whitesmove ? up : down
@@ -431,7 +431,7 @@ end
 function possiblemoves(b::board)
     possible = [pawnMoves(b); rookMoves(b); knightMoves(b); 
                 bishopMoves(b); queenMoves(b); kingMoves(b)]
-    #possible = [possible; castlingMoves(b,possible)]
+    possible = [possible; castlingMoves(b,possible)]
     return possible
 end
 
