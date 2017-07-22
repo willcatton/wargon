@@ -676,6 +676,7 @@ function replay(b::board)
         m = pop!(moves)
         println("> $(show(m))")
         apply!(b2, m)
+        push!(b2.moves, m)
         print(b2)
         if length(moves) > 0
             println("\nReplay mode: press enter for next move")
