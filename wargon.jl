@@ -142,10 +142,13 @@ function retrieve(hsh, ply)
         return CACHE[hsh][ply]
     end
 end
-CACHE = try
-   CACHE
+global CACHE = try
+    CACHE
 catch
-   Dict{UInt,Dict{Int,Tuple{Int,moves}}}()
+    Dict{UInt,Dict{Int,Tuple{Int,moves}}}()
+end
+function clearcache()
+    CACHE = Dict{UInt,Dict{Int,Tuple{Int,moves}}}()
 end
 
 NOSQ = 65
@@ -376,34 +379,36 @@ function castlingMoves(b::board, possible::Array{moves,1}; whitesmove=b.whitesmo
     unmoved(piece) = !(piece in [m.oldpc for m in b.moves])
     if whitesmove && unmoved(05)
         if (move(05,04,05,05) in possible) && (move(01,04,01,01) in possible) && unmoved(01)
-            #if !incheck(b, whitesmove)
+            if !intocheck(b, castle(05,03,05,01,04,01))
                 push!(mymoves, castle(05,03,05,01,04,01))
-            #end
+            end
         end
         if (move(05,06,05,05) in possible) && (move(08,06,08,08) in possible) && unmoved(08)
-            #if !incheck(b, whitesmove)
+            if !intocheck(b, castle(05,07,05,08,06,08))
                 push!(mymoves, castle(05,07,05,08,06,08))
-            #end
+            end
         end
     elseif !whitesmove && unmoved(61)
         if (move(61,60,61,61) in possible) && (move(57,60,57,57) in possible) && unmoved(57)
-            #if !incheck(b, whitesmove)
+            if !intocheck(b, castle(61,59,61,57,60,57))
                 push!(mymoves, castle(61,59,61,57,60,57))
-            #end
+            end
         end
         if (move(61,62,61,61) in possible) && (move(64,62,64,64) in possible) && unmoved(64)
-            #if !incheck(b, whitesmove)
+            if !intocheck(b, castle(61,63,61,64,62,64))
                 push!(mymoves, castle(61,63,61,64,62,64))
-            #end
+            end
         end
     end
     return mymoves
 end
 
-function possiblemoves(b::board)
+function possiblemoves(b::board; includecastling=true)
     possible = [pawnMoves(b); knightMoves(b); bishopMoves(b); 
                 rookMoves(b); queenMoves(b); kingMoves(b)]
-    possible = [possible; castlingMoves(b,possible)]
+    if includecastling
+        possible = [possible; castlingMoves(b,possible)]
+    end
     return possible
 end
 
@@ -411,7 +416,7 @@ function incheck(b::board, white)
     whitesmove = b.whitesmove
     k = white ? 5 : 61
     b.whitesmove = !white
-    for m in possiblemoves(b)
+    for m in possiblemoves(b, includecastling=false)
         if m.newsq == b.pieces[k]
             b.whitesmove = whitesmove
             return true
@@ -426,6 +431,18 @@ function intocheck(b::board, m::moves)
     result = incheck(b, !b.whitesmove)
     takeback!(b, m)
     return result
+end
+
+function intocheck(b::board, m::castle)
+    if incheck(b, b.whitesmove)
+        return true
+    end
+    # Castling across check already handled by move generator
+    apply!(b, m)
+    result = incheck(b, !b.whitesmove)
+    takeback!(b, m)
+    return result
+    return false
 end
 
 function allowedmoves(b::board)
@@ -446,7 +463,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
                 filter((x)->typeof(x)==move, toconsider)]
   if depth == 0
     vb, mb = value(bi), move(0, 0, 0, 0)
-    store(hsh, depth, (vb, mb))
+    #store(hsh, depth, (vb, mb))
     return vb, mb
   end
   if whitesmove
@@ -497,6 +514,27 @@ function iterativelydeepen(b::board, depth, iterations; options=moves[])
         s, m = alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=options)
     end
     return m, s
+end
+
+function predict(b::board)
+    pred = moves[]
+    bc = deepcopy(b)
+    res = Array{Tuple{Int64,move},1}()
+    while true
+        try
+            ci = CACHE[hashboard(bc)]
+            ki = maximum(keys(ci))
+            vi, pi = CACHE[hashboard(bc)][ki]
+            push!(res, (ki, pi))
+            apply!(bc, pi)
+        catch
+            return res
+        end
+    end
+end
+
+function forecast(b::board)
+    return join([string(show(x[2])," [",x[1],"]") for x in predict(b)], " => ")
 end
 
 function input(prompt::AbstractString="")
@@ -585,6 +623,9 @@ function play(b; autoplay=false)
         if mstr in ["back","takeback","undo"]
             takeback!(b); takeback!(b)
             println("\nYa cheetah! Rewinding your last move...")
+            continue
+        elseif mstr in ["forecast", "predict"]
+            println("\n", forecast(b))
             continue
         elseif mstr in ["auto","autoplay"]
             AUTOPLAY = true
