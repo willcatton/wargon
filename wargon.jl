@@ -25,6 +25,14 @@ immutable take <: moves
   newpc::Int
   takes::Int
 end
+type enpassent <: moves
+  oldsq::Int
+  newsq::Int
+  oldpc::Int
+  newpc::Int
+  takesq::Int
+  takepc::Int
+end
 immutable castle <: moves
   oldsq::Int
   newsq::Int
@@ -81,6 +89,16 @@ function apply!(b::board, m::take)
   b.whitesmove=!b.whitesmove
   return
 end
+function apply!(b::board, m::enpassent)
+  b.pieces[m.oldpc]=NOSQ
+  b.pieces[m.newpc]=m.newsq
+  b.squares[m.oldsq]=NOSQ
+  b.squares[m.newsq]=m.newpc
+  b.squares[m.takesq]=NOSQ
+  b.pieces[m.takepc]=NOSQ
+  b.whitesmove=!b.whitesmove
+  return
+end
 function apply!(b::board, m::castle)
   b.pieces[m.oldpc] = m.newsq
   b.squares[m.oldsq] = NOSQ
@@ -110,6 +128,12 @@ function takeback!(b::board, m::take)
   apply!(b, undo)
   b.pieces[taken] = undo.oldsq
   b.squares[undo.oldsq] = taken
+end
+function takeback!(b::board, m::enpassent)
+  undo = move(m.newsq,m.oldsq,m.newpc,m.oldpc)
+  apply!(b, undo)
+  b.pieces[m.takepc] = m.takepc
+  b.squares[m.takesq] = m.takepc
 end
 function takeback!(b::board, m::castle)
   undo = castle(m.newsq, m.oldsq, m.oldpc, m.newsq2, m.oldsq2, m.oldpc2)
@@ -241,7 +265,7 @@ function tomove(b::board)
         if abs(from-to)==2
             return first([x for x in castlingmoves if x.oldsq==from && x.newsq==to])
         end
-    end 
+    end
     if length(m)==7 
         newpcstr = m[7]
         if (piece in whitepawn) && (row(to)==8)
@@ -253,11 +277,26 @@ function tomove(b::board)
         end
     end
     if takes == NOSQ
-      return move(from,to,piece,piece)
+      if (piece in whitepawn) && (col(to) !== col(from))
+          takesq = down(to)
+          takepc = filter((x)->col(x)==col(to), blackpawn)[1]
+          return enpassent(from,to,piece,piece,takesq,takepc)
+      elseif (piece in blackpawn) && (col(to) !== col(from))
+          takesq = up(to)
+          takepc = filter((x)->col(x)==col(to), whitepawn)[1]
+          return enpassent(from,to,piece,piece,takesq,takepc)
+      else
+          return move(from,to,piece,piece,)
+      end
     else
       return take(from,to,piece,piece,takes)
     end
   end
+end
+
+function justmovedouttwo(p, b)
+  lastmove = b.moves[end]
+  (lastmove.oldpc == p) && (abs(row(lastmove.oldsq) - row(lastmove.newsq))==2)
 end
 
 function pawnMoves(b::board; whitesmove=b.whitesmove)
@@ -277,6 +316,13 @@ function pawnMoves(b::board; whitesmove=b.whitesmove)
             push!(mymoves,promote(from,to,piece,piece-16,b.squares[to]))
           else
             push!(mymoves,take(from,to,piece,piece,b.squares[to]))
+          end
+        elseif (whitesmove && row(to)==6) || (!whitesmove && row(to)==3)
+          ep = whitesmove ? down(to) : up(to)
+          if isopposite(whitesmove,ep,b)
+            if justmovedouttwo(b.squares[ep], b)
+              push!(mymoves,enpassent(from,to,piece,piece,ep,b.squares[ep]))
+            end
           end
         end
       end
@@ -459,6 +505,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
   end
   toconsider = [filter((x)->typeof(x)==promote, toconsider);
                 filter((x)->typeof(x)==take, toconsider);
+                filter((x)->typeof(x)==enpassent, toconsider);
                 filter((x)->typeof(x)==castle, toconsider)
                 filter((x)->typeof(x)==move, toconsider)]
   if depth == 0
@@ -596,6 +643,7 @@ end
 
 show(m::move) = string(square(m.oldsq),":",square(m.newsq))
 show(m::take) = string(square(m.oldsq),"x",square(m.newsq))
+show(m::enpassent) = string(square(m.oldsq),"x",square(m.newsq))
 show(m::castle) = string(square(m.oldsq),":",square(m.newsq))
 show(m::promote) = string(square(m.oldsq),ifelse(m.takes!=NOSQ,"x",":"),square(m.newsq),":",ifelse(25<=m.newpc<=42,"N","Q"))
 
