@@ -50,6 +50,8 @@ immutable promote <: moves
 end
 ==(m1::moves,m2::moves) = ((typeof(m1)==typeof(m2)) && (m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) &&
                            (m1.oldpc==m2.oldpc) && (m1.newpc==m2.newpc) && (m1.takes==m2.takes))
+==(m1::enpassent,m2::enpassent) = (m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) && (m1.oldpc==m2.oldpc) && 
+                                  (m1.newpc==m2.newpc) && (m1.takesq==m2.takesq) && (m1.takepc==m2.takepc)
 ==(m1::move,m2::move) = ((m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) && (m1.oldpc==m2.oldpc) && (m1.newpc==m2.newpc))
 ==(m1::castle,m2::castle) = ((m1.oldsq==m2.oldsq) && (m1.newsq==m2.newsq) && (m1.oldpc==m2.oldpc))
 type board
