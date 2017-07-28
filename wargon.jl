@@ -665,11 +665,14 @@ function play(b; autoplay=false)
     tic = time()
     try
       if !autoplay && b.whitesmove
-        print(b)
+        print(b); print("\n")
         if length(allowed) == 0
            return gameover(b)
         end
-        mstr = input("\n> ")
+        mstr = ""
+        while mstr == ""
+            mstr = input("> ")
+        end
         if mstr in ["back","takeback","undo"]
             takeback!(b); takeback!(b)
             println("\nYa cheetah! Rewinding your last move...")
