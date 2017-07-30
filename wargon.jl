@@ -497,11 +497,11 @@ function allowedmoves(b::board)
     [m for m in possiblemoves(b) if !(intocheck(b, m))]
 end 
 
-function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
+function alphabeta(bi::board, ply, α, β, whitesmove; options=moves[])
   prescribed = length(options) !== 0
   toconsider = prescribed ? options : possiblemoves(bi)
   hsh = hashboard(bi)
-  cch = retrieve(hsh, depth) 
+  cch = retrieve(hsh, ply) 
   if cch !== nothing
     return cch
   end
@@ -510,9 +510,9 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
                 filter((x)->typeof(x)==enpassent, toconsider);
                 filter((x)->typeof(x)==castle, toconsider)
                 filter((x)->typeof(x)==move, toconsider)]
-  if depth == 0
+  if ply == 0
     vb, mb = value(bi), move(0, 0, 0, 0)
-    store(hsh, depth, (vb, mb))
+    store(hsh, ply, (vb, mb))
     return vb, mb
   end
   if whitesmove
@@ -520,7 +520,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
     for mi in toconsider
       apply!(bi, mi)
       push!(bi.moves, mi)
-      s, mr = alphabeta(bi,depth-1,α,β,false)
+      s, mr = alphabeta(bi,ply-1,α,β,false)
       pop!(bi.moves)
       takeback!(bi, mi)
       if s > vb
@@ -531,15 +531,15 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
         break
       end
     end
-    VERBOSE && println("whitesmove: ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", vb, " α=$α β=$β")
-    store(hsh, depth, (vb, mb))
+    VERBOSE && println("whitesmove: ",ply," :  ","    "^(LEVEL-ply),show(mb), " : ", vb, " α=$α β=$β")
+    store(hsh, ply, (vb, mb))
     return vb, mb
   else
     mb, vb = move(0, 0, 0, 0), +999999
     for mi in toconsider
       apply!(bi, mi)
       push!(bi.moves, mi)
-      s, mr = alphabeta(bi,depth-1,α,β,true)
+      s, mr = alphabeta(bi,ply-1,α,β,true)
       pop!(bi.moves)
       takeback!(bi, mi)
       if s < vb
@@ -550,17 +550,17 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
         break
       end
     end
-    VERBOSE && println("blacksmove ",depth," :  ","    "^(LEVEL-depth),show(mb), " : ", vb, " α=$α β=$β")
-    store(hsh, depth, (vb, mb))
+    VERBOSE && println("blacksmove ",ply," :  ","    "^(LEVEL-ply),show(mb), " : ", vb, " α=$α β=$β")
+    store(hsh, ply, (vb, mb))
     return vb, mb
   end
 end
 
-function iterativelydeepen(b::board, depth, iterations; options=moves[])
+function iterativelydeepen(b::board, ply, iterations; options=moves[])
     m, s = move(0, 0, 0, 0), -Inf
     for i in 1:iterations
         VERBOSE && println("Running alphabeta at $(LEVEL-iterations+i) ply")
-        s, m = alphabeta(b, depth-iterations+i, -Inf, Inf, b.whitesmove; options=options)
+        s, m = alphabeta(b, ply-iterations+i, -Inf, Inf, b.whitesmove; options=options)
     end
     return m, s
 end
