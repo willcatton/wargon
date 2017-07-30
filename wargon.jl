@@ -497,28 +497,37 @@ function allowedmoves(b::board)
     [m for m in possiblemoves(b) if !(intocheck(b, m))]
 end 
 
-function minimax(board, ply)
-  moves = shuffle(allowedmoves(board))
-  if ply == 0 || length(moves) == 0
-    score = ifelse(board.whitesmove, 1, -1) * value(board)
-    #println(ply," :  ","    "^(2-ply),show(move)," : ",score)
-    return (0,0,""), score
+function minimax(bi::board, ply; options=moves[])
+  prescribed = length(options) !== 0
+  toconsider = prescribed ? options : possiblemoves(bi)
+  hsh = hashboard(bi)
+  cch = retrieve(hsh, ply)
+  if cch !== nothing
+    return cch
   end
-  best_move, best_score = (0,0,""), -Inf
-  for move in moves
-    #println("    "^(2-ply),show(move))
-    undoing = apply!(board, move)
-    score = -minimax(board, ply-1)[2]
-    #println(ply," :  ","    "^(3-ply),show(move), " : ", score)
-    if ply == LEVEL
-        # println(show(move)," : ",score)
-    end
-    if score > best_score
-      best_move, best_score = move, score
-    end
-    restore!(board, undoing...)
+  toconsider = [filter((x)->typeof(x)==promote, toconsider);
+                filter((x)->typeof(x)==take, toconsider);
+                filter((x)->typeof(x)==enpassent, toconsider);
+                filter((x)->typeof(x)==castle, toconsider)
+                filter((x)->typeof(x)==move, toconsider)]
+  if ply == 0 || length(toconsider) == 0
+    s, m = ifelse(bi.whitesmove, 1, -1) * value(bi), move(0,0,0,0)
+    store(hsh, ply, (s, m))
+    VERBOSE && println(ply," :  ","    "^(LEVEL-ply)," : ",s)
+    return s, m
   end
-  return best_move, best_score
+  best_score, best_move = -Inf, move(0,0,0,0)
+  for m in toconsider
+    apply!(bi, m)
+    s = -minimax(bi, ply-1)[1]
+    VERBOSE && println(ply," :  ","    "^(LEVEL-ply),show(m)," : ",score)
+    if s > best_score
+      best_score, best_move = s, m
+    end
+    takeback!(bi, m)
+  end
+  store(hsh, ply, (best_score, best_move))
+  return best_score, best_move
 end
 
 function alphabeta(bi::board, ply, α, β, whitesmove; options=moves[])
@@ -586,7 +595,7 @@ function iterativelydeepen(b::board, ply, iterations; options=moves[])
         VERBOSE && println("Running alphabeta at $(LEVEL-iterations+i) ply")
         s, m = alphabeta(b, ply-iterations+i, -Inf, Inf, b.whitesmove; options=options)
     end
-    return m, s
+    return s, m
 end
 
 function predict(b::board)
@@ -724,7 +733,7 @@ function play(b; autoplay=false)
       if length(allowed) == 0
          return gameover(b2)
       end
-      m, s = iterativelydeepen(b2, LEVEL, ITDEEP; options=allowed)
+      s, m = iterativelydeepen(b2, LEVEL, ITDEEP; options=allowed)
       toc = time()
       elapsed = Base.Dates.Second(round(toc-tic))
       print("\n> ",show(m)," elapsed time: $elapsed\n")
