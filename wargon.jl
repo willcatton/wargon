@@ -512,7 +512,7 @@ function alphabeta(bi::board, depth, α, β, whitesmove; options=moves[])
                 filter((x)->typeof(x)==move, toconsider)]
   if depth == 0
     vb, mb = value(bi), move(0, 0, 0, 0)
-    #store(hsh, depth, (vb, mb))
+    store(hsh, depth, (vb, mb))
     return vb, mb
   end
   if whitesmove
