@@ -6,4 +6,4 @@ include("wargon.jl")
 b = newboard()
 play(b)
 ```
-dan woz ere
+dan woz ere.
