@@ -1,0 +1,3 @@
+rm cecp.log
+xboard -fcp ./cecp.jl &
+tail -f cecp.log
