@@ -6,3 +6,6 @@ Requires: xboard
 ```julia
 include("wargon.jl")
 ```
+
+dan woz ere.
+
